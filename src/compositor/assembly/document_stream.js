@@ -75,6 +75,7 @@ export class DocumentStream {
         dpi: page.dpi || this.targetDpi,
         pageBox,
         rasterBackground: raster,
+        paths: page.paths,
         vectorElements: page.vectorElements,
         textElements: page.textElements,
         metadata: page.metadata

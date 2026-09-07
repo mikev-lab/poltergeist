@@ -7,6 +7,12 @@
 import { decodeRaster } from '../ingestion/raster/index.js';
 import { decodeLayered } from '../ingestion/layered/index.js';
 import { isDocumentFormat, decodeDocument } from '../ingestion/document/index.js';
+import { RawDecoder, decodeRaw } from '../ingestion/raw/index.js';
+import { SvgDecoder } from '../ingestion/vector/svg_decoder.js';
+import { probeVectorFormat, decodeVector } from '../ingestion/vector/index.js';
+import { DxfDecoder } from '../ingestion/cad/dxf_decoder.js';
+import { probeCadFormat, decodeCad } from '../ingestion/cad/index.js';
+import { probePublicationFormat, decodePublication } from '../ingestion/publication/index.js';
 import { DocumentStream } from '../compositor/assembly/document_stream.js';
 import { TransparencyFlattener } from '../compositor/flattener/transparency_flattener.js';
 import { downsampleForPrepress, resample } from '../compositor/resample/resample.js';
@@ -112,16 +118,32 @@ export function convert(input, options = {}) {
   const tacMax = options.tacMax || 300;
   const requiresCmyk = targetFormat === ExportFormat.PDF_X1A || targetFormat === ExportFormat.TIFFSEP;
 
-  // 1. Ingest: Sniff Document vs Layered vs Raster
+  // 1. Ingest: Sniff Document vs Layered vs Raster vs Raw vs Vector vs CAD vs Publication
   let document = null;
   let image = null;
 
   if (input instanceof Document) {
     document = input;
+  } else if (typeof input === 'string') {
+    if (SvgDecoder.probe(input)) {
+      document = SvgDecoder.decode(input, options);
+    } else if (DxfDecoder.probe(input)) {
+      document = DxfDecoder.decode(input, options);
+    } else {
+      throw new Error('Unsupported text input format');
+    }
   } else {
     const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
 
-    if (isDocumentFormat(bytes)) {
+    if (RawDecoder.probe(bytes)) {
+      image = decodeRaw(bytes, options);
+    } else if (probeVectorFormat(bytes)) {
+      document = decodeVector(bytes, options);
+    } else if (probeCadFormat(bytes)) {
+      document = decodeCad(bytes, options);
+    } else if (probePublicationFormat(bytes)) {
+      document = decodePublication(bytes, options);
+    } else if (isDocumentFormat(bytes)) {
       document = decodeDocument(bytes, options);
     } else {
       const isPsd = bytes.length >= 4 && bytes[0] === 0x38 && bytes[1] === 0x42 && bytes[2] === 0x50 && bytes[3] === 0x53;
@@ -182,17 +204,43 @@ export function convert(input, options = {}) {
         return PdfX4Generator.generate(processedDoc, options);
 
       case ExportFormat.TIFF: {
-        const firstRaster = processedDoc.pages.find(p => p.rasterBackground)?.rasterBackground;
+        let firstRaster = processedDoc.pages.find(p => p.rasterBackground)?.rasterBackground;
         if (!firstRaster) {
-          throw new Error('Document does not contain any raster pages for TIFF export');
+          const firstPage = processedDoc.pages[0];
+          const w = Math.round((firstPage?.widthPts || 612) * (targetDpi / 72));
+          const h = Math.round((firstPage?.heightPts || 792) * (targetDpi / 72));
+          firstRaster = new RasterImage({
+            width: w,
+            height: h,
+            channels: 4,
+            bitsPerSample: 8,
+            colorSpace: ColorSpaceType.CMYK,
+            pixelFormat: PixelFormat.CMYK32,
+            dpiX: targetDpi,
+            dpiY: targetDpi,
+            data: new Uint8Array(w * h * 4)
+          });
         }
         return TiffWriter.write(firstRaster, options);
       }
 
       case ExportFormat.TIFFSEP: {
-        const firstRaster = processedDoc.pages.find(p => p.rasterBackground)?.rasterBackground;
+        let firstRaster = processedDoc.pages.find(p => p.rasterBackground)?.rasterBackground;
         if (!firstRaster) {
-          throw new Error('Document does not contain any raster pages for TIFFSEP export');
+          const firstPage = processedDoc.pages[0];
+          const w = Math.round((firstPage?.widthPts || 612) * (targetDpi / 72));
+          const h = Math.round((firstPage?.heightPts || 792) * (targetDpi / 72));
+          firstRaster = new RasterImage({
+            width: w,
+            height: h,
+            channels: 4,
+            bitsPerSample: 8,
+            colorSpace: ColorSpaceType.CMYK,
+            pixelFormat: PixelFormat.CMYK32,
+            dpiX: targetDpi,
+            dpiY: targetDpi,
+            data: new Uint8Array(w * h * 4)
+          });
         }
         return SeparationPlateGenerator.generatePlates(firstRaster, options);
       }

@@ -156,6 +156,18 @@ export class PdfX1aGenerator {
         );
       }
 
+      // Vector paths
+      if (page.paths && page.paths.length > 0) {
+        contentLines.push('q', '0 0 0 1 K', '0 0 0 1 k', '1 w'); // 100% K stroke/fill
+        for (const p of page.paths) {
+          const pdfOps = typeof p.toPdfPathData === 'function' ? p.toPdfPathData() : '';
+          if (pdfOps) {
+            contentLines.push(pdfOps, 'S');
+          }
+        }
+        contentLines.push('Q');
+      }
+
       if (contentLines.length === 0) {
         // Minimal valid content stream
         contentLines.push('q Q');

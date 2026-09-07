@@ -51,6 +51,18 @@ export * from './ingestion/pdf/filters.js';
 export * from './ingestion/pdf/page_tree.js';
 export * from './ingestion/document/index.js';
 
+// Camera RAW & Digital Negatives
+export * from './ingestion/raw/index.js';
+
+// Vector Graphics (SVG, AI, CDR, WMF)
+export * from './ingestion/vector/index.js';
+
+// Architectural & Engineering CAD (DXF, DWG)
+export * from './ingestion/cad/index.js';
+
+// Digital Publications & Comics (CBZ, CBR, EPUB)
+export * from './ingestion/publication/index.js';
+
 // Document Stream Processing
 export * from './compositor/assembly/document_stream.js';
 
