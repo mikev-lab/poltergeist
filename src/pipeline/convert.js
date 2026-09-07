@@ -103,25 +103,139 @@ function convertImageToCmyk(image, options = {}, tacMax = 300, sharedTransform =
 }
 
 /**
+ * Generates a calibrated proof image (JPEG or lossless TIFF) from a PageRecord or RasterImage.
+ * Supports true-resolution native extraction or specified DPI (72, 300, 600, 1200).
+ * @param {PageRecord|RasterImage} source
+ * @param {number|string} proofDpi Target resolution (e.g. 72, 300, 600, 1200, 'native', 'source')
+ * @param {string} [proofFormat='jpeg'] 'jpeg' or 'tiff'
+ * @param {number} [quality=85] Compression quality for JPEG
+ * @returns {Uint8Array}
+ */
+function generateProofImage(source, proofDpi, proofFormat = 'jpeg', quality = 85, rawOverride = null) {
+  let raster = rawOverride || source;
+  let pageW = 612;
+  let pageH = 792;
+  let pageDpi = 300;
+
+  if (source instanceof PageRecord || (source && typeof source === 'object' && ('widthPts' in source || 'width' in source || 'image' in source))) {
+    raster = rawOverride || source.image || source.rasterBackground;
+    pageW = source.widthPts || source.width || 612;
+    pageH = source.heightPts || source.height || 792;
+    pageDpi = source.dpi || 300;
+  } else if (source instanceof RasterImage) {
+    raster = source;
+    pageDpi = source.dpiX || 300;
+    pageW = (source.width / pageDpi) * 72;
+    pageH = (source.height / (source.dpiY || pageDpi)) * 72;
+  }
+
+  if (!raster) {
+    const dpi = (typeof proofDpi === 'number' && proofDpi > 0) ? proofDpi : 72;
+    const w = Math.max(1, Math.round(pageW * (dpi / 72)));
+    const h = Math.max(1, Math.round(pageH * (dpi / 72)));
+    raster = new RasterImage({
+      width: w,
+      height: h,
+      channels: 3,
+      bitsPerSample: 8,
+      colorSpace: ColorSpaceType.RGB,
+      pixelFormat: PixelFormat.RGB24,
+      dpiX: dpi,
+      dpiY: dpi,
+      data: new Uint8Array(w * h * 3).fill(255)
+    });
+  }
+
+  const isNative = proofDpi === 'native' || proofDpi === 'source' || proofDpi === 'original';
+  let targetImg = raster;
+
+  if (!isNative && typeof proofDpi === 'number' && proofDpi > 0) {
+    const targetW = Math.max(1, Math.round(pageW * (proofDpi / 72)));
+    const targetH = Math.max(1, Math.round(pageH * (proofDpi / 72)));
+
+    if (raster.width !== targetW || raster.height !== targetH) {
+      targetImg = resample(raster, targetW, targetH, { filter: 'bicubic' });
+    }
+  }
+
+  const finalDpi = isNative ? (targetImg.dpiX || pageDpi) : proofDpi;
+
+  if (proofFormat === 'tiff' || proofFormat === 'tif') {
+    return TiffWriter.write(targetImg, { compress: true });
+  }
+
+  // JPEG proof (convert CMYK -> sRGB if needed)
+  let rgbImg = targetImg;
+  if (targetImg.colorSpace === ColorSpaceType.CMYK) {
+    const numPixels = targetImg.width * targetImg.height;
+    const rgbData = new Uint8Array(numPixels * 3);
+    const cData = targetImg.data;
+    for (let i = 0; i < numPixels; i++) {
+      const c = cData[i * 4] / 255.0;
+      const m = cData[i * 4 + 1] / 255.0;
+      const y = cData[i * 4 + 2] / 255.0;
+      const k = cData[i * 4 + 3] / 255.0;
+      rgbData[i * 3] = Math.round(255.0 * (1.0 - c) * (1.0 - k));
+      rgbData[i * 3 + 1] = Math.round(255.0 * (1.0 - m) * (1.0 - k));
+      rgbData[i * 3 + 2] = Math.round(255.0 * (1.0 - y) * (1.0 - k));
+    }
+    rgbImg = new RasterImage({
+      width: targetImg.width,
+      height: targetImg.height,
+      channels: 3,
+      bitsPerSample: 8,
+      colorSpace: ColorSpaceType.RGB,
+      pixelFormat: PixelFormat.RGB24,
+      dpiX: finalDpi,
+      dpiY: finalDpi,
+      data: rgbData
+    });
+  }
+
+  return JpegWriter.write(rgbImg, { quality, dpiX: finalDpi, dpiY: finalDpi });
+}
+
+/**
  * High-speed prepress conversion orchestrator.
  * Supports raster, layered formats, and multi-page document layouts (PDF, IDML, OpenXML, ODF, iWork, XPS, PS).
+ * Supports multi-page splitting, true/high-res proofs, and manga screentone preservation.
+ *
  * @param {Uint8Array|Buffer|Document} input 
  * @param {object} [options]
  * @param {string} [options.targetFormat=ExportFormat.PDF_X1A]
  * @param {boolean} [options.downsample=true] Apply prepress threshold downsampling (>450 DPI -> 300 DPI)
+ * @param {boolean} [options.bypassDownsampling=false] Direct bypass of downsampling (preserves 600/1200 DPI manga line art)
+ * @param {boolean} [options.preserveResolution=false] Alias to bypass downsampling
  * @param {number} [options.targetDpi=300] Target print resolution
  * @param {number} [options.tacMax=300] Total Area Coverage ink limit (300% SWOP, 320% GRACoL)
- * @param {import('../color/icc/profile.js').IccProfile} [options.sourceIccProfile] Input RGB/CMYK profile (defaults to image embedded profile or sRGB)
- * @param {import('../color/icc/profile.js').IccProfile} [options.targetIccProfile] Destination CMYK profile (defaults to Fogra39 reference profile)
- * @param {string} [options.jobName='job']
+ * @param {import('../color/icc/profile.js').IccProfile} [options.sourceIccProfile] Input RGB/CMYK profile
+ * @param {import('../color/icc/profile.js').IccProfile} [options.targetIccProfile] Destination CMYK profile
+ * @param {boolean} [options.splitPages=false] Split multi-page document into individual single-page files
+ * @param {boolean} [options.renderProofs=false] Render proof images alongside the main output
+ * @param {number|string|Array<number|string>} [options.proofDpi=72] Proof resolution (72, 300, 600, 1200, 'native')
+ * @param {string} [options.proofFormat='jpeg'] Proof file format ('jpeg' or 'tiff')
+ * @param {number} [options.proofQuality=85] Compression quality for JPEG proofs
+ * @param {number} [options.page] Extract specific 1-indexed page number
+ * @param {number[]} [options.pages] Extract specific list of 1-indexed page numbers
+ * @param {string} [options.jobName='document'] Base job name
+ * @param {function} [options.pageNaming] Custom page file naming callback (pageNum, page) => string
  * @returns {Uint8Array|Map<string, Uint8Array>}
  */
 export function convert(input, options = {}) {
   const targetFormat = (options.targetFormat || options.format || ExportFormat.PDF_X1A).toLowerCase();
-  const shouldDownsample = options.downsample !== false;
+  const shouldDownsample = options.downsample !== false &&
+    !options.bypassDownsampling &&
+    !options.preserveResolution;
   const targetDpi = options.targetDpi || options.dpi || 300;
   const tacMax = options.tacMax || 300;
   const requiresCmyk = targetFormat === ExportFormat.PDF_X1A || targetFormat === ExportFormat.TIFFSEP;
+  const splitPages = options.splitPages === true;
+  const renderProofs = options.renderProofs === true;
+  const proofDpis = Array.isArray(options.proofDpi)
+    ? options.proofDpi
+    : [options.proofDpi ?? 72];
+  const proofFormat = (options.proofFormat || 'jpeg').toLowerCase();
+  const proofQuality = options.proofQuality ?? 85;
 
   let sharedTransform = null;
   if (requiresCmyk) {
@@ -181,14 +295,35 @@ export function convert(input, options = {}) {
 
   // 2. Process Multi-page Document
   if (document) {
+    // Early Page Range Filtering
+    if (options.page !== undefined) {
+      const pNum = options.page;
+      if (!Number.isInteger(pNum) || pNum < 1 || pNum > document.pages.length) {
+        throw new RangeError(`Requested page ${pNum} is out of document bounds (1..${document.pages.length})`);
+      }
+      document.pages = [document.pages[pNum - 1]];
+    } else if (Array.isArray(options.pages) && options.pages.length > 0) {
+      const selected = [];
+      for (const p of options.pages) {
+        if (!Number.isInteger(p) || p < 1 || p > document.pages.length) {
+          throw new RangeError(`Requested page ${p} is out of document bounds (1..${document.pages.length})`);
+        }
+        selected.push(document.pages[p - 1]);
+      }
+      document.pages = selected;
+    }
+
     const docStream = new DocumentStream(document, {
       downsample: shouldDownsample,
       targetDpi
     });
 
     const processedPages = [];
+    const originalRgbPages = [];
     for (const page of docStream.streamPages()) {
       let pageImage = page.image || page.rasterBackground;
+      originalRgbPages.push(pageImage);
+
       if (pageImage && requiresCmyk && pageImage.colorSpace !== ColorSpaceType.CMYK) {
         pageImage = convertImageToCmyk(pageImage, options, tacMax, sharedTransform);
       }
@@ -216,6 +351,87 @@ export function convert(input, options = {}) {
       iccProfile: document.iccProfile
     });
 
+    // Multi-page splitting or proofing active
+    if (splitPages || renderProofs || (processedPages.length > 1 && (targetFormat === ExportFormat.JPEG || targetFormat === ExportFormat.JPG) && options.firstPageOnly !== true)) {
+      const resultMap = new Map();
+      const jobName = options.jobName || 'document';
+
+      // If combined master document is requested alongside individual proofs:
+      if (!splitPages && (targetFormat === ExportFormat.PDF_X1A || targetFormat === ExportFormat.PDF_X4)) {
+        const fullPdf = targetFormat === ExportFormat.PDF_X1A
+          ? PdfX1aGenerator.generate(processedDoc, options)
+          : PdfX4Generator.generate(processedDoc, options);
+        resultMap.set(`${jobName}.pdf`, fullPdf);
+      }
+
+      for (let i = 0; i < processedPages.length; i++) {
+        const page = processedPages[i];
+        const rawPageImage = originalRgbPages[i] || page.image;
+        const pageNum = page.pageNumber;
+        const baseName = options.pageNaming ? options.pageNaming(pageNum, page) : `page_${pageNum}`;
+
+        // 1. Export main target format if splitPages is active (or multi-page JPEG export)
+        if (splitPages || targetFormat === ExportFormat.JPEG || targetFormat === ExportFormat.JPG) {
+          switch (targetFormat) {
+            case ExportFormat.PDF_X1A: {
+              const pdf = PdfX1aGenerator.generate([page], options);
+              resultMap.set(`${baseName}.pdf`, pdf);
+              break;
+            }
+            case ExportFormat.PDF_X4: {
+              const pdf = PdfX4Generator.generate([page], options);
+              resultMap.set(`${baseName}.pdf`, pdf);
+              break;
+            }
+            case ExportFormat.TIFF: {
+              const tif = TiffWriter.write(page.image, options);
+              resultMap.set(`${baseName}.tif`, tif);
+              break;
+            }
+            case ExportFormat.TIFFSEP: {
+              const plates = SeparationPlateGenerator.generatePlates(page.image, { ...options, jobName: baseName });
+              for (const [plateName, plateBuf] of plates) {
+                resultMap.set(plateName, plateBuf);
+              }
+              break;
+            }
+            case ExportFormat.JPEG:
+            case ExportFormat.JPG: {
+              const jpg = generateProofImage(page, targetDpi, 'jpeg', proofQuality, rawPageImage);
+              resultMap.set(`${baseName}.jpg`, jpg);
+              break;
+            }
+          }
+        }
+
+        // 2. Export proofs if requested
+        if (renderProofs) {
+          for (const pDpi of proofDpis) {
+            const isNative = pDpi === 'native' || pDpi === 'source' || pDpi === 'original';
+            const dpiSuffix = isNative ? '_native' : (proofDpis.length > 1 ? `_${pDpi}dpi` : '');
+            const ext = (proofFormat === 'tiff' || proofFormat === 'tif') ? 'tif' : 'jpg';
+            let proofFileName = `${baseName}${dpiSuffix}.${ext}`;
+
+            // Prevent collision if splitPages already created that filename
+            if (resultMap.has(proofFileName)) {
+              proofFileName = `${baseName}_proof${dpiSuffix}.${ext}`;
+            }
+
+            const proofBuf = generateProofImage(page, pDpi, proofFormat, proofQuality, rawPageImage);
+            resultMap.set(proofFileName, proofBuf);
+          }
+        }
+      }
+
+      // If single page was extracted without splitPages or renderProofs, return single buffer
+      if (resultMap.size === 1 && !splitPages && !renderProofs) {
+        return resultMap.values().next().value;
+      }
+
+      return resultMap;
+    }
+
+    // Default multi-page combined export (when neither splitPages nor renderProofs is requested)
     switch (targetFormat) {
       case ExportFormat.PDF_X1A:
         return PdfX1aGenerator.generate(processedDoc, options);
@@ -307,7 +523,53 @@ export function convert(input, options = {}) {
     processedImage = convertImageToCmyk(image, options, tacMax, sharedTransform);
   }
 
-  // 4. Export Target
+  // 4. Export Target (with optional proofing)
+  if (renderProofs) {
+    const resultMap = new Map();
+    const jobName = options.jobName || 'image';
+
+    let mainBytes;
+    let mainExt = 'pdf';
+    switch (targetFormat) {
+      case ExportFormat.PDF_X1A:
+        mainBytes = PdfX1aGenerator.generate(processedImage, options);
+        mainExt = 'pdf';
+        break;
+      case ExportFormat.PDF_X4:
+        mainBytes = PdfX4Generator.generate(processedImage, options);
+        mainExt = 'pdf';
+        break;
+      case ExportFormat.TIFF:
+        mainBytes = TiffWriter.write(processedImage, options);
+        mainExt = 'tif';
+        break;
+      case ExportFormat.TIFFSEP:
+        return SeparationPlateGenerator.generatePlates(processedImage, options);
+      case ExportFormat.JPEG:
+      case ExportFormat.JPG:
+        mainBytes = JpegWriter.write(processedImage, { ...options, dpiX: targetDpi, dpiY: targetDpi });
+        mainExt = 'jpg';
+        break;
+      default:
+        throw new Error(`Unsupported export format: ${targetFormat}`);
+    }
+    resultMap.set(`${jobName}.${mainExt}`, mainBytes);
+
+    for (const pDpi of proofDpis) {
+      const isNative = pDpi === 'native' || pDpi === 'source' || pDpi === 'original';
+      const dpiSuffix = isNative ? '_native' : (proofDpis.length > 1 ? `_${pDpi}dpi` : '');
+      const ext = (proofFormat === 'tiff' || proofFormat === 'tif') ? 'tif' : 'jpg';
+      let proofFileName = `${jobName}_proof${dpiSuffix}.${ext}`;
+      if (resultMap.has(proofFileName)) {
+        proofFileName = `${jobName}_proof2${dpiSuffix}.${ext}`;
+      }
+      const proofBuf = generateProofImage(image, pDpi, proofFormat, proofQuality);
+      resultMap.set(proofFileName, proofBuf);
+    }
+
+    return resultMap;
+  }
+
   switch (targetFormat) {
     case ExportFormat.PDF_X1A:
       return PdfX1aGenerator.generate(processedImage, options);

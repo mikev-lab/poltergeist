@@ -60,7 +60,7 @@ export class DocumentStream {
       }
 
       // 2. Prepress Downsampling if page has a raster background
-      let raster = page.rasterBackground;
+      let raster = page.image || page.rasterBackground;
       if (raster && this.downsample) {
         raster = downsampleForPrepress(raster, {
           targetDpi: this.targetDpi,
@@ -69,11 +69,13 @@ export class DocumentStream {
       }
 
       const processedPage = new PageRecord({
+        pageNumber: page.pageNumber !== undefined ? page.pageNumber : index + 1,
         pageIndex: index,
         widthPts: page.widthPts,
         heightPts: page.heightPts,
         dpi: page.dpi || this.targetDpi,
         pageBox,
+        image: raster,
         rasterBackground: raster,
         paths: page.paths,
         vectorElements: page.vectorElements,

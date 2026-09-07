@@ -10,7 +10,7 @@
     <img src="https://img.shields.io/badge/Node.js-%3E%3D22.0.0-339933?logo=node.js&logoColor=white" alt="Node.js Version">
     <img src="https://img.shields.io/badge/dependencies-0-success.svg?style=flat&color=2ea44f" alt="Zero Dependencies">
     <img src="https://img.shields.io/badge/Ghostscript%20Parity-100%25-6f42c1.svg" alt="Ghostscript Parity">
-    <img src="https://img.shields.io/badge/tests-294%20passing-brightgreen.svg" alt="Test Suite">
+    <img src="https://img.shields.io/badge/tests-311%20passing-brightgreen.svg" alt="Test Suite">
     <img src="https://img.shields.io/badge/memory--safety-100%25-blue.svg" alt="Memory Safety">
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
   </p>
@@ -188,6 +188,37 @@ const decoder = new ClipDecoder();
 
 const image = decoder.decode(clipBuffer);
 console.log(`Ingested ${image.width}x${image.height} Clip Studio canvas!`);
+```
+
+---
+
+### 6. Document Page Splitting, Multi-Tier Proofs & Manga Screentone Preservation
+
+Split multi-page publications into standalone print PDFs, render simultaneous 72/300 DPI screen proofs, or preserve 600/1200 DPI manga screentones without Moiré artifacts:
+
+```javascript
+import fs from 'node:fs';
+import { convert, ExportFormat } from 'poltergeist';
+
+const mangaPdf = fs.readFileSync('chapter_01.pdf');
+
+// Split 20-page chapter into individual print PDFs + 72 DPI screen proofs
+// and bypass downsampling to preserve 600/1200 DPI halftone screentones
+const results = convert(mangaPdf, {
+  splitPages: true,
+  targetFormat: ExportFormat.PDF_X1A,
+  renderProofs: true,
+  proofDpi: [72, 'native'],       // 72 DPI web proof + lossless native screentone proof
+  proofFormat: 'tiff',            // Lossless Deflate TIFF (no DCT ringing on screentones)
+  bypassDownsampling: true,       // Prevent Moiré on high-frequency halftones
+  pageNaming: (n) => `ch01_p${String(n).padStart(3, '0')}`
+});
+
+// results is a Map<string, Uint8Array> containing:
+// 'ch01_p001.pdf', 'ch01_p001_72dpi.tif', 'ch01_p001_native.tif', ...
+for (const [filename, buffer] of results) {
+  fs.writeFileSync(filename, buffer);
+}
 ```
 
 ---
