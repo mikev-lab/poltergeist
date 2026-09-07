@@ -19,14 +19,28 @@ export class TgaDecoder {
     }
 
     const idLength = bytes[0];
+    const colorMapType = bytes[1];
     const imageType = bytes[2];
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
+    if (colorMapType !== 0 && colorMapType !== 1) {
+      throw new Error(`Invalid TGA color map type: ${colorMapType}`);
+    }
+
+    const validTypes = new Set([1, 2, 3, 9, 10, 11]);
+    if (!validTypes.has(imageType)) {
+      throw new Error(`Invalid or unsupported TGA image type: ${imageType}`);
+    }
+
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const width = view.getUint16(12, true);
     const height = view.getUint16(14, true);
     const pixelDepth = bytes[16];
     const descriptor = bytes[17];
     const isTopDown = (descriptor & 0x20) !== 0;
+
+    if (pixelDepth !== 8 && pixelDepth !== 15 && pixelDepth !== 16 && pixelDepth !== 24 && pixelDepth !== 32) {
+      throw new Error(`Invalid or unsupported TGA pixel depth: ${pixelDepth}`);
+    }
 
     if (width <= 0 || height <= 0) {
       throw new Error(`Invalid TGA dimensions: ${width}x${height}`);
@@ -50,16 +64,21 @@ export class TgaDecoder {
       hasAlpha = true;
     }
 
-    const bytesPerPixel = Math.floor(pixelDepth / 8);
-    const outData = new Uint8Array(width * height * channels);
-    let inPos = 18 + idLength;
-
+    const bytesPerPixel = Math.max(1, Math.floor(pixelDepth / 8));
     const totalPixels = width * height;
-    const rawPixels = new Uint8Array(totalPixels * bytesPerPixel);
+    const expectedDataSize = totalPixels * bytesPerPixel;
+    const inPosStart = 18 + idLength;
+
+    if (!isRle && bytes.length < inPosStart + expectedDataSize) {
+      throw new Error(`Truncated TGA data stream: expected ${expectedDataSize} bytes, available ${bytes.length - inPosStart}`);
+    }
+
+    const outData = new Uint8Array(width * height * channels);
+    let inPos = inPosStart;
+    const rawPixels = new Uint8Array(expectedDataSize);
 
     if (!isRle) {
-      const copyLen = Math.min(bytes.length - inPos, rawPixels.length);
-      rawPixels.set(bytes.subarray(inPos, inPos + copyLen));
+      rawPixels.set(bytes.subarray(inPos, inPos + expectedDataSize));
     } else {
       let pixelCount = 0;
       while (pixelCount < totalPixels && inPos < bytes.length) {

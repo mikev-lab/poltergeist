@@ -15,7 +15,8 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "test": "node --test tests/**/*.test.js"
+    "test": "node --test tests/**/*.test.js",
+    "benchmark": "node benchmarks/runner.js"
   },
   "keywords": [
     "prepress",
