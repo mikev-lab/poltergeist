@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-validate:
+    name: Code Hygiene & Documentation Integrity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Verify Documentation Link Integrity
+        run: |
+          echo "Verifying documentation link integrity..."
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            function scanDir(dir) {
+              let files = [];
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                const fullPath = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                  if (entry.name !== "node_modules" && entry.name !== ".git") {
+                    files = files.concat(scanDir(fullPath));
+                  }
+                } else if (entry.name.endsWith(".md")) {
+                  files.push(fullPath);
+                }
+              }
+              return files;
+            }
+            const mdFiles = scanDir(".");
+            let failures = 0;
+            for (const file of mdFiles) {
+              const content = fs.readFileSync(file, "utf8");
+              const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+              let match;
+              while ((match = linkRegex.exec(content)) !== null) {
+                const link = match[2].trim();
+                if (link.startsWith("http://") || link.startsWith("https://") || link.startsWith("#")) continue;
+                const cleanLink = link.split("#")[0];
+                if (!cleanLink) continue;
+                const target = cleanLink.startsWith("/")
+                  ? path.join(".", cleanLink)
+                  : path.resolve(path.dirname(file), cleanLink);
+                if (!fs.existsSync(target)) {
+                  console.error(`Broken link in ${file}: "${link}" -> target "${target}" does not exist`);
+                  failures++;
+                }
+              }
+            }
+            if (failures > 0) {
+              console.error(`Found ${failures} broken markdown link(s).`);
+              process.exit(1);
+            }
+            console.log("All documentation links verified successfully.");
+          '
+
+  test-matrix:
+    name: Test Suite (${{ matrix.os }})
+    needs: lint-and-validate
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies (if package.json exists)
+        run: |
+          if [ -f package.json ]; then
+            npm ci || npm install
+          fi
+        shell: bash
+
+      - name: Run Unit & Integration Tests (if test runner configured)
+        run: |
+          if [ -f package.json ]; then
+            npm test
+          else
+            echo "package.json not yet initialized; skipping npm test."
+          fi
+        shell: bash

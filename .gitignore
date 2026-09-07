@@ -141,3 +141,14 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Agent Directives, Views, and Living Documentation (Rule 4)
+AGENTS.md
+agents.md
+Agents.md
+.agents/
+.agents-audit/
+*.agent.tmp
+*.agent.log
+*.agent.json
+
