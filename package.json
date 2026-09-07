@@ -7,7 +7,9 @@
   "exports": {
     ".": "./src/index.js",
     "./color": "./src/color/index.js",
-    "./types": "./src/types/color.js"
+    "./types": "./src/types/image.js",
+    "./compositor": "./src/compositor/blend/compositor.js",
+    "./layered": "./src/ingestion/layered/index.js"
   },
   "engines": {
     "node": ">=22.0.0"

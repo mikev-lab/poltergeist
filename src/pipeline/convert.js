@@ -5,12 +5,15 @@
  */
 
 import { decodeRaster } from '../ingestion/raster/index.js';
+import { decodeLayered } from '../ingestion/layered/index.js';
+import { TransparencyFlattener } from '../compositor/flattener/transparency_flattener.js';
 import { downsampleForPrepress, resample } from '../compositor/resample/resample.js';
 import { ColorTransform } from '../color/transform/transform.js';
 import { IccProfile } from '../color/icc/profile.js';
 import { TacLimiter } from '../color/tac/tac_limiter.js';
 import { RgbColor, CmykColor } from '../types/color.js';
 import { RasterImage, ColorSpaceType, PixelFormat } from '../types/image.js';
+import { LayeredImage } from '../types/layer.js';
 import { PdfX1aGenerator } from '../export/pdf/pdfx1a.js';
 import { PdfX4Generator } from '../export/pdf/pdfx4.js';
 import { TiffWriter } from '../export/tiff/tiff_writer.js';
@@ -25,6 +28,7 @@ export const ExportFormat = Object.freeze({
 
 /**
  * High-speed prepress conversion orchestrator.
+ * Supports raster (PNG, TIFF, JPEG, BMP, TGA, WebP) and layered formats (PSD, PSB, CLIP, XCF).
  * @param {Uint8Array|Buffer} inputBuffer 
  * @param {object} [options]
  * @param {string} [options.targetFormat=ExportFormat.PDF_X1A]
@@ -41,8 +45,21 @@ export function convert(inputBuffer, options = {}) {
   const targetDpi = options.targetDpi || 300;
   const tacMax = options.tacMax || 300;
 
-  // 1. Ingest Raster
-  let image = decodeRaster(inputBuffer);
+  // 1. Ingest: Sniff Layered vs Raster
+  const bytes = inputBuffer instanceof Uint8Array ? inputBuffer : new Uint8Array(inputBuffer);
+  let image;
+
+  const isPsd = bytes.length >= 4 && bytes[0] === 0x38 && bytes[1] === 0x42 && bytes[2] === 0x50 && bytes[3] === 0x53;
+  const isClip = bytes.length >= 16 && bytes[0] === 0x53 && bytes[1] === 0x51 && bytes[2] === 0x4c && bytes[3] === 0x69;
+  const isXcf = bytes.length >= 9 && bytes[0] === 0x67 && bytes[1] === 0x69 && bytes[2] === 0x6d && bytes[3] === 0x70;
+
+  if (isPsd || isClip || isXcf) {
+    const layered = decodeLayered(bytes);
+    // Flatten layered graphic to an opaque RasterImage
+    image = TransparencyFlattener.flattenToRaster(layered);
+  } else {
+    image = decodeRaster(bytes);
+  }
 
   // 2. Prepress Resampling / Downsampling
   if (shouldDownsample) {
