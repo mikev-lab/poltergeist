@@ -25,13 +25,18 @@ SVG path strings (`d="..."`) are parsed through a linear state-machine tokenizer
 - **Relative to Absolute Conversion**: Relative coordinates (`m, l, c, s, q, t, a`) maintain running current coordinates `(curX, curY)`.
 - **Higher-Order Curve Normalization**:
   - Quadratic Béziers (`Q`, `q`, `T`, `t`) are mathematically elevated to cubic Béziers:
-    $$\mathbf{CP}_1 = \mathbf{P}_0 + \frac{2}{3}(\mathbf{P}_{\text{control}} - \mathbf{P}_0), \quad \mathbf{CP}_2 = \mathbf{P}_1 + \frac{2}{3}(\mathbf{P}_{\text{control}} - \mathbf{P}_1)$$
+    ```text
+CP1 = P0 + (2/3) × (Pcontrol - P0)
+CP2 = P1 + (2/3) × (Pcontrol - P1)
+```
   - Smooth Curves (`S`, `s` and `T`, `t`): Control points are mirrored across current point:
-    $$\mathbf{CP}_1 = 2\mathbf{P}_{\text{current}} - \mathbf{CP}_{\text{previous}}$$
+    ```text
+CP1 = 2 × P_current - CP_previous
+```
 - **Basic Shape Translation**:
-  - `<rect>` $\to$ 4-point closed path.
-  - `<circle>` and `<ellipse>` $\to$ 4-segment cubic Bézier spline with circular constant $k = 0.5522847498$.
-  - `<line>`, `<polyline>`, `<polygon>` $\to$ linear path sequence.
+  - `<rect>` → 4-point closed path.
+  - `<circle>` and `<ellipse>` → 4-segment cubic Bézier spline with circular constant k = 0.5522847498.
+  - `<line>`, `<polyline>`, `<polygon>` → linear path sequence.
 
 ---
 
@@ -40,13 +45,19 @@ SVG path strings (`d="..."`) are parsed through a linear state-machine tokenizer
 AutoCAD schematics are typically modeled in real-world units (e.g., millimeters, meters, inches, or feet) with arbitrary coordinate extents. `DxfDecoder` performs automated coordinate projection onto standardized commercial print architectural sheets:
 
 1. **Model Extents Calculation**:
-   $$X_{\min}, Y_{\min}, X_{\max}, Y_{\max} \implies W_{\text{model}} = X_{\max} - X_{\min}, \quad H_{\text{model}} = Y_{\max} - Y_{\min}$$
+   ```text
+Bounding Extents:
+X_min, Y_min, X_max, Y_max
+W_model = X_max - X_min,  H_model = Y_max - Y_min
+```
 2. **Sheet Dimensions**:
-   - `ARCH_D`: $36 \times 24\text{ in} \implies 2592 \times 1728\text{ pt}$.
-   - `ARCH_E`: $48 \times 36\text{ in} \implies 3456 \times 2592\text{ pt}$.
-   - `ISO_A1`: $841 \times 594\text{ mm} \implies 2384 \times 1684\text{ pt}$.
-   - `ISO_A0`: $1189 \times 841\text{ mm} \implies 3370 \times 2384\text{ pt}$.
+   - `ARCH_D`: 36 × 24 in → 2592 × 1728 pt.
+   - `ARCH_E`: 48 × 36 in → 3456 × 2592 pt.
+   - `ISO_A1`: 841 × 594 mm → 2384 × 1684 pt.
+   - `ISO_A0`: 1189 × 841 mm → 3370 × 2384 pt.
 3. **Aspect-Preserving Centered Scale**:
-   $$\text{scale} = \min\left(\frac{W_{\text{sheet}} - 2 \cdot \text{margin}}{W_{\text{model}}}, \frac{H_{\text{sheet}} - 2 \cdot \text{margin}}{H_{\text{model}}}\right)$$
+   ```text
+scale = min((W_sheet - 2 × margin) / W_model, (H_sheet - 2 × margin) / H_model)
+```
 4. **ACI Color Mapping**:
    AutoCAD Color Index 1 through 7 mapped to standardized RGB primaries (`1=Red, 2=Yellow, 3=Green, 4=Cyan, 5=Blue, 6=Magenta, 7=Black/White`).

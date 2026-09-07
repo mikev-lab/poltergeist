@@ -53,8 +53,8 @@ Adobe InDesign Markup Language (IDML) packages are OPC ZIP containers representi
 
 ### 3.1 Microsoft Word (`word_decoder.js`)
 - **Geometry**: Extracted from `<w:pgSz w:w="..." w:h="..." w:orient="..."/>`.
-  - Units in twips / dxa ($1\text{ pt} = 20\text{ dxa}$).
-  - Portrait ($612 \times 792\text{ pt}$) vs. Landscape ($792 \times 612\text{ pt}$).
+  - Units in twips / dxa (1 pt = 20 dxa).
+  - Portrait (612 × 792 pt) vs. Landscape (792 × 612 pt).
 - **Margins & TrimBox**: Extracted from `<w:pgMar w:top="..." w:bottom="..." w:left="..." w:right="..."/>`.
 - **Page Breaks**: Splits sections and content on `<w:br w:type="page"/>` into sequential `PageRecord` instances.
 
@@ -64,9 +64,9 @@ Adobe InDesign Markup Language (IDML) packages are OPC ZIP containers representi
 
 ### 3.3 Microsoft PowerPoint (`ppt_decoder.js`)
 - **Slide Dimensions**: Extracted from `<p:sldSz cx="..." cy="..."/>` in `ppt/presentation.xml`.
-  - Coordinates in EMUs ($1\text{ pt} = 12,700\text{ EMUs}$).
-  - 16:9 Widescreen ($12,192,000 \times 6,858,000\text{ EMUs} = 960 \times 540\text{ pt}$).
-  - 4:3 Standard ($9,144,000 \times 6,858,000\text{ EMUs} = 720 \times 540\text{ pt}$).
+  - Coordinates in EMUs (1 pt = 12,700 EMUs).
+  - 16:9 Widescreen (12,192,000 × 6,858,000 EMUs = 960 × 540 pt).
+  - 4:3 Standard (9,144,000 × 6,858,000 EMUs = 720 × 540 pt).
 - Maps each slide in `ppt/slides/slide*.xml` to a sequential `PageRecord`.
 
 ---
@@ -85,7 +85,7 @@ Parses Compound File Binary Format (CFBF / OLE 2) used by legacy Word (`.doc`), 
 ### 5.1 Apple iWork (`src/ingestion/document/iwork/iwork_decoder.js`)
 - Inspects ZIP packages for `.pages`, `.keynote`, and `.numbers`.
 - Detects high-fidelity vector preview `QuickLook/Preview.pdf` or `preview.pdf`, decoding full vector pages via `PdfDecoder`.
-- Falls back to raster thumbnail previews or application dimension defaults (Keynote $1024 \times 768\text{ pt}$, Pages $612 \times 792\text{ pt}$).
+- Falls back to raster thumbnail previews or application dimension defaults (Keynote 1024 × 768 pt, Pages 612 × 792 pt).
 
 ### 5.2 OpenDocument (`src/ingestion/document/odf/odf_decoder.js`)
 - Parses `application/vnd.oasis.opendocument.*` packages (`.odt`, `.ods`, `.odp`, `.odg`).
@@ -105,5 +105,5 @@ Parses Compound File Binary Format (CFBF / OLE 2) used by legacy Word (`.doc`), 
   - `%%Title: ...` and `%%Creator: ...`
 
 ### 6.2 OpenXPS & DjVu (`src/ingestion/document/xps/xps_decoder.js`)
-- **OpenXPS**: ZIP package parsing sorted `.fpage` entries; converts 1/96" DIPs to PDF points ($1\text{ DIP} = 0.75\text{ pt}$).
+- **OpenXPS**: ZIP package parsing sorted `.fpage` entries; converts 1/96" DIPs to PDF points (1 DIP = 0.75 pt).
 - **DjVu**: Parses `AT&T` container and `INFO` chunk dimensions and DPI.

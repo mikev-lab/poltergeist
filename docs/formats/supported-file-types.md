@@ -7,7 +7,7 @@ Poltergeist is a universal prepress file handling suite capable of replacing Gho
 All ingestion parsers and export engines conform strictly to:
 1. **Zero External Runtime Dependencies**: Pure internal decoding without shelling out to `ghostscript`, `imagemagick`, `dcraw`, `unrar`, or dynamic C bindings.
 2. **Adversarial Resiliency**: Gracefully reject malformed byte streams, corrupt chunk CRCs, decompression bombs, and hostile offsets with rich, typed diagnostic errors.
-3. **Bounded Memory Footprint**: Ingestion operates via scanlines, tiles, or sequential stream extraction ($O(\text{chunk})$), never allocating $O(\text{file\_size})$.
+3. **Bounded Memory Footprint**: Ingestion operates via scanlines, tiles, or sequential stream extraction (O(chunk)), never allocating O(file_size).
 
 ---
 
@@ -41,7 +41,7 @@ graph TD
 
 #### Adobe Photoshop (`.psd`, `.psb`)
 - **Header Signature**: `38 42 50 53` (`8BPS`). Version: `1` for PSD (up to 30,000 px), `2` for PSB (up to 300,000 px).
-- **Topology**: File Header $\to$ Color Mode Data $\to$ Image Resources (`8BIM` tags: resolution info `0x03ED`, embedded ICC `0x040F`) $\to$ Layer & Mask Section $\to$ Image Data.
+- **Topology**: File Header → Color Mode Data → Image Resources (`8BIM` tags: resolution info `0x03ED`, embedded ICC `0x040F`) → Layer & Mask Section → Image Data.
 - **Compression Modes**: Raw uncompressed, RLE PackBits, ZIP without prediction, ZIP with prediction. Supports 8-bit, 16-bit, and 32-bit channel depths.
 
 #### Adobe InDesign (`.indd`, `.idml`)
@@ -122,7 +122,7 @@ Architectural drawings, blueprints, and engineering schematics:
 - **Entities Handled**: `LINE`, `POINT`, `CIRCLE`, `ARC`, `ELLIPSE`, `LWPOLYLINE`, `SPLINE`, `TEXT`, `MTEXT`, `HATCH`, `DIMENSION`.
 - **Prepress Projection**:
   - Model space coordinate normalization to target paper size (Arch A through Arch E, ANSI A through E, ISO A0–A4).
-  - Layer visibility and line weight (lineweight $\to$ point thickness: e.g. 0.25mm $\to$ 0.708 pt) mapping.
+  - Layer visibility and line weight (lineweight → point thickness: e.g. 0.25mm → 0.708 pt) mapping.
   - Conversion of true color and AutoCAD Color Index (ACI) to calibrated CMYK.
 
 ---
@@ -161,9 +161,9 @@ Poltergeist compiles all ingested assets into print-standard production outputs:
   - `<job>_Yellow.tif`
   - `<job>_Black.tif`
   - `<job>_<SpotName>.tif` (e.g. `<job>_PANTONE_185_C.tif`, `<job>_Spot_UV.tif`)
-- **Prepress Resampling Engine**: Separable 2D Bicubic and Lanczos-3 convolution downsampling oversized raster content exceeding $450\text{ DPI}$ to target $300\text{ DPI}$.
+- **Prepress Resampling Engine**: Separable 2D Bicubic and Lanczos-3 convolution downsampling oversized raster content exceeding 450 DPI to target 300 DPI.
 - **PDF/X-1a Transparency Flattener**: Slices overlapping transparent artwork into atomic non-overlapping regions and rasterizes contone sub-tiles while preserving non-transparent vector text and lines.
-- **Overprint Simulation (`-dSimulateOverprint`)**: Simulates subtractive ink mixing ($OPM = 1$) on physical plates for accurate soft proofs.
+- **Overprint Simulation (`-dSimulateOverprint`)**: Simulates subtractive ink mixing (OPM = 1) on physical plates for accurate soft proofs.
 
 ---
 

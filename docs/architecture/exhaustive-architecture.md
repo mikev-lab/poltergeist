@@ -12,8 +12,8 @@ Ghostscript has historically introduced catastrophic security vulnerabilities an
 
 Poltergeist eliminates these attack surfaces and operational risks through three foundational invariants:
 1. **Zero External Runtime Dependencies**: All binary decoders, rasterizers, mathematical color transforms, and file encoders are pure, native implementations maintained inside this repository. No dynamic linking to `libpng`, `libjpeg`, `LittleCMS`, `Ghostscript`, or native shared libraries.
-2. **Deterministic Bounded Memory**: Peak working memory scales as $O(\text{tile})$ or $O(\text{scanline})$, never scaling linearly with overall file size ($O(\text{file\_size})$).
-3. **Formal Prepress Mathematical Correctness**: Strict compliance with graphic arts standards, including ICC v2/v4 Profile Connection Spaces, 3D LUT tetrahedral interpolation, deterministic Total Area Coverage (TAC) ink limiting, and standard CIEDE2000 tolerances ($\Delta E_{00} \le 1.0$).
+2. **Deterministic Bounded Memory**: Peak working memory scales as O(tile) or O(scanline), never scaling linearly with overall file size (O(file_size)).
+3. **Formal Prepress Mathematical Correctness**: Strict compliance with graphic arts standards, including ICC v2/v4 Profile Connection Spaces, 3D LUT tetrahedral interpolation, deterministic Total Area Coverage (TAC) ink limiting, and standard CIEDE2000 tolerances (ΔE00 ≤ 1.0).
 
 ---
 
@@ -75,7 +75,7 @@ flowchart TD
 
 #### 3.1.1 Adobe Photoshop (`.psd`, `.psb`)
 - **Header Structure (26 bytes)**:
-  - Magic bytes: `38 42 50 53` (`8BPS`). Version: `1` (PSD: dimensions $\le 30,000\text{ px}$) or `2` (PSB: dimensions $\le 300,000\text{ px}$).
+  - Magic bytes: `38 42 50 53` (`8BPS`). Version: `1` (PSD: dimensions ≤ 30,000 px) or `2` (PSB: dimensions ≤ 300,000 px).
   - Channels (1–56), Depth (1, 8, 16, 32 bits per channel), Color Mode (Bitmap, Grayscale, Indexed, RGB, CMYK, Multi-channel, Duotone, Lab).
 - **Color Mode Data**: Palette lookups for indexed modes.
 - **Image Resources**: Chunks tagged `8BIM`. Extracts resolution info (`0x03ED`), embedded ICC profiles (`0x040F`), alpha channel metadata, and slice descriptors.
@@ -97,7 +97,7 @@ flowchart TD
 
 #### 3.1.3 GIMP (`.xcf`)
 - **Header**: Magic bytes `gimp xcf v***`.
-- **Channel & Hierarchy**: Traverses layer offset pointers, extracting channel tiles ($64 \times 64$ blocks) compressed via RLE or zlib.
+- **Channel & Hierarchy**: Traverses layer offset pointers, extracting channel tiles (64 × 64 blocks) compressed via RLE or zlib.
 
 ---
 
@@ -113,14 +113,14 @@ flowchart TD
   - `IEND`: Terminal chunk.
 - **Scanline Un-filtering**:
   Reconstructs original byte values across five standard filter methods:
-  - None ($x = \text{Filt}(x)$)
-  - Sub ($x = \text{Filt}(x) + \text{Prior}$)
-  - Up ($x = \text{Filt}(x) + \text{Above}$)
-  - Average ($x = \text{Filt}(x) + \lfloor(\text{Prior} + \text{Above}) / 2\rfloor$)
-  - Paeth: Computes $p = a + b - c$, calculates $|p - a|$, $|p - b|$, $|p - c|$, returning closest predictor.
+  - None (x = Filt(x))
+  - Sub (x = Filt(x) + Prior)
+  - Up (x = Filt(x) + Above)
+  - Average (x = Filt(x) + floor((Prior + Above) / 2))
+  - Paeth: Computes p = a + b - c, calculates |p - a|, |p - b|, |p - c|, returning closest predictor.
 - **Ancillary Prepress Chunks**:
   - `iCCP`: Extracts raw embedded ICC profile buffer.
-  - `pHYs`: Converts pixels-per-meter into print resolution (DPI = $\text{PPM} \times 0.0254$).
+  - `pHYs`: Converts pixels-per-meter into print resolution (DPI = PPM × 0.0254).
   - `sRGB`, `gAMA`, `cHRM`: Fallback colorimetry coordinates.
 
 #### 3.2.2 JPEG (`.jpg`, `.jpeg`)
@@ -144,10 +144,12 @@ Ingests raw sensor data from commercial DSLR and medium-format cameras:
 - **Supported Formats**: Hasselblad (`.3fr`), Sony (`.arw`, `.sr2`), Canon (`.cr2`, `.crw`), Adobe (`.dng`), Nikon (`.nef`), Olympus (`.orf`), Pentax (`.pef`), Fujifilm (`.raf`), Leica/Panasonic (`.raw`), Sigma Foveon (`.x3f`), Mamiya (`.mef`), Minolta (`.mrw`), Epson (`.erf`).
 - **Processing Stages**:
   1. **TIFF/EP Traversal**: Locate Raw IFD and extract CFA (Color Filter Array) pattern geometry (e.g. standard Bayer RGGB, BGGR, GRBG, or GBRG).
-  2. **Linearization**: Subtract black level offsets and divide by saturation white levels to linearize pixel sensor intensity into $[0.0, 1.0]$.
+  2. **Linearization**: Subtract black level offsets and divide by saturation white levels to linearize pixel sensor intensity into [0.0, 1.0].
   3. **High-Fidelity Demosaicing**: Adaptive Homogeneity-Directed (AHD) interpolation or Variable Number of Gradients (VNG) to interpolate missing red, green, and blue components at each sensor sensel without color fringing.
   4. **Camera Matrix Calibration**: Apply forward matrix transform:
-     $$\begin{bmatrix} X \\ Y \\ Z \end{bmatrix}_{\text{PCS}} = \mathbf{M}_{\text{Camera}\to\text{XYZ}} \times \begin{bmatrix} R \\ G \\ B \end{bmatrix}_{\text{Sensor}}$$
+     ```text
+[X, Y, Z]^T = CameraMatrix_D65 × [R, G, B]^T
+```
 
 ---
 
@@ -164,7 +166,7 @@ Ingests raw sensor data from commercial DSLR and medium-format cameras:
 - **Entity Ingestion**: Parses AutoCAD drawing entities: `LINE`, `POINT`, `CIRCLE`, `ARC`, `ELLIPSE`, `LWPOLYLINE`, `SPLINE`, `TEXT`, `MTEXT`, `HATCH`, `DIMENSION`.
 - **Prepress Projection**:
   - Bounding box normalization from Model Space to Target Sheet Coordinates (ANSI A–E, Arch A–E, ISO A0–A4).
-  - Lineweight resolution (index $\to$ physical millimeter stroke width $\to$ points).
+  - Lineweight resolution (index → physical millimeter stroke width → points).
   - ACI (AutoCAD Color Index) lookup table mapping to calibrated CMYK swatches.
 
 ---
@@ -201,12 +203,14 @@ Ghostscript is heavily utilized for raw PDF ingestion (`pdfwrite`). Poltergeist 
 
 ### 4.1 Layer Blending & Rasterization
 The compositor combines multi-layer graphic records into unified page buffers:
-- **Porter-Duff Compositing**: Standard alpha blending ($A \text{ over } B$):
-  $$\alpha_{\text{out}} = \alpha_A + \alpha_B (1 - \alpha_A)$$
-  $$C_{\text{out}} = \frac{C_A \alpha_A + C_B \alpha_B (1 - \alpha_A)}{\alpha_{\text{out}}}$$
+- **Porter-Duff Compositing**: Standard alpha blending (A over B):
+  ```text
+α_out = α_A + α_B × (1 - α_A)
+C_out = (C_A × α_A + C_B × α_B × (1 - α_A)) / α_out
+```
 - **Blend Modes**: Implements Photoshop-compatible separable and non-separable blend equations:
-  - *Multiply*: $B(C_b, C_s) = C_b \times C_s$
-  - *Screen*: $B(C_b, C_s) = C_b + C_s - (C_b \times C_s)$
+  - *Multiply*: `B(Cb, Cs) = Cb × Cs`
+  - *Screen*: `B(Cb, Cs) = Cb + Cs - (Cb × Cs)`
   - *Overlay*: Hard Light inverted condition.
   - *Darken*, *Lighten*, *Color Dodge*, *Color Burn*, *Hard Light*, *Soft Light*, *Difference*, *Exclusion*.
 - **Clipping Masks**: Masks downstream base layer alpha channel over upstream clipped layers.
@@ -219,15 +223,20 @@ Poltergeist strictly adheres to a **direct 1:1 conversion pipeline**. There is i
   - `BleedBox`: Content boundary including bleeds.
   - `TrimBox`: Final trimmed dimensions after commercial cutting.
   - `CropBox`: Preview clipping boundary.
-- **Direct Output Dispatch**: Each ingested page $P_i$ produces an output page $P'_i$ in the target PDF/X or prepress raster format with bit-level preservation of geometry, maximizing execution speed and throughput.
+- **Direct Output Dispatch**: Each ingested page P_i produces an output page P'_i in the target PDF/X or prepress raster format with bit-level preservation of geometry, maximizing execution speed and throughput.
 
 ### 4.3 Prepress Image Resampling & Downsampling (Bicubic / Lanczos)
 To prevent bloated multi-gigabyte files when users embed excessive resolution assets (e.g. 1200+ DPI smartphone photos), Poltergeist provides deterministic image downsampling:
 - **Downsample Threshold**: Evaluates effective image DPI against target resolution:
-  $$\text{DPI}_{\text{effective}} = \frac{\text{Pixels}}{\text{Dimensions (inches)}}$$
-  If $\text{DPI}_{\text{effective}} > \text{DPI}_{\text{target}} \times 1.5$ (e.g. $>450\text{ DPI}$ for a $300\text{ DPI}$ print target), downsampling is triggered.
+  ```text
+DPI_effective = Pixels / Dimensions (inches)
+```
+  If DPI_effective > DPI_target × 1.5 (e.g. >450 DPI for a 300 DPI print target), downsampling is triggered.
 - **Bicubic & Lanczos-3 Kernels**: High-fidelity 2D separable convolution filtering preserving edge contrast without aliasing artifacts:
-  $$L(x) = \begin{cases} \text{sinc}(x) \times \text{sinc}(x/3) & \text{if } |x| < 3 \\ 0 & \text{otherwise} \end{cases}$$
+  ```text
+L(x) = sinc(x) × sinc(x/3)  (if |x| < 3)
+L(x) = 0                    (otherwise)
+```
 
 ### 4.4 PDF/X-1a Transparency Flattener
 Because PDF/X-1a:2001 strictly prohibits live transparency, Poltergeist incorporates a pure native transparency flattening engine:
@@ -239,8 +248,11 @@ Because PDF/X-1a:2001 strictly prohibits live transparency, Poltergeist incorpor
 In commercial offset printing, inks set to "Overprint" (`OP true` in PDF) do not knock out the underlying plates, but rather mix on paper:
 - **Overprint Evaluation**: Evaluates PDF graphics state overprint flags (`/OP`, `/op`, `/OPM`).
 - **Subtractive Ink Mixing Simulation**:
-  When Overprint Mode is enabled ($OPM = 1$), a non-zero channel in the foreground ink leaves the background channel untouched, while a zero-value foreground channel allows the background plate to print through:
-  $$C_{\text{final}} = \begin{cases} C_{\text{fg}} & \text{if foreground defines } C \\ C_{\text{bg}} & \text{if foreground does not define } C \text{ (overprint)} \end{cases}$$
+  When Overprint Mode is enabled (OPM = 1), a non-zero channel in the foreground ink leaves the background channel untouched, while a zero-value foreground channel allows the background plate to print through:
+  ```text
+C_final = C_fg  (if foreground defines C)
+C_final = C_bg  (if foreground does not define C - overprint)
+```
 - **Proofing Simulation**: Generates accurate soft proofs in JPEG and TIFF that visually reveal overprinting spot inks and black overprint text.
 
 ### 4.6 Font Outlining & Vector Conversion
@@ -267,36 +279,48 @@ Parses ICC.1:2010 (v4.3) and ICC.1:2001-04 (v2) binary profiles:
 
 ### 5.2 3D / 4D CLUT Tetrahedral Interpolation
 For multi-dimensional LUTs (`mft1`, `mft2`, `mABType`, `mBAType`), trilinear interpolation introduces planar banding in saturated gradients. Poltergeist implements **Tetrahedral Interpolation**:
-1. Locate the unit cube enclosing input point $(x_0, y_0, z_0)$ with normalized offsets $(\Delta x, \Delta y, \Delta z)$.
-2. Divide the cube into six tetrahedra based on the relative magnitudes of $\Delta x, \Delta y, \Delta z$:
-   - If $\Delta x \ge \Delta y \ge \Delta z$:
-     $$P = P_{000} + \Delta x(P_{100} - P_{000}) + \Delta y(P_{110} - P_{100}) + \Delta z(P_{111} - P_{110})$$
-   - If $\Delta x \ge \Delta z \ge \Delta y$:
-     $$P = P_{000} + \Delta x(P_{100} - P_{000}) + \Delta z(P_{101} - P_{100}) + \Delta y(P_{111} - P_{101})$$
+1. Locate the unit cube enclosing input point (x0, y0, z0) with normalized offsets (Δx, Δy, Δz).
+2. Divide the cube into six tetrahedra based on the relative magnitudes of Δx, Δy, Δz:
+   - If Δx ≥ Δy ≥ Δz:
+     ```text
+P = P_000 + Δx(P_100 - P_000) + Δy(P_110 - P_100) + Δz(P_111 - P_110)
+```
+   - If Δx ≥ Δz ≥ Δy:
+     ```text
+P = P_000 + Δx(P_100 - P_000) + Δz(P_101 - P_100) + Δy(P_111 - P_101)
+```
    - Evaluate remaining 4 tetrahedral permutations identically.
 3. Eliminates color banding across deep shadows and highlight gradients.
 
 ### 5.3 Prepress Total Area Coverage (TAC) & UCR / GCR
-Commercial presses have ink saturation limits ($\text{TAC}_{\max} \in [280\%, 330\%]$).
-When $C + M + Y + K > \text{TAC}_{\max}$:
+Commercial presses have ink saturation limits (TAC_max in [280%, 330%]).
+When C + M + Y + K > TAC_max:
 1. **Neutral Density Component**:
-   $$N = \min(C, M, Y)$$
+   ```text
+N = min(C, M, Y)
+```
 2. **Gray Component Replacement (GCR)**:
-   Extract neutral gray mass from the chromatic inks ($C, M, Y$) and shift into the Black ($K$) plate:
-   $$K' = \min\left(100\%, K + (N \times \phi_{\text{GCR}})\right)$$
+   Extract neutral gray mass from the chromatic inks (C, M, Y) and shift into the Black (K) plate:
+   ```text
+K' = min(100%, K + (N × φ_GCR))
+```
 3. **Under Color Removal (UCR)**:
-   If remaining sum still exceeds $\text{TAC}_{\max}$, subtract ink mass proportionally from $C, M, Y$ to preserve the original chromatic hue angle ($\Delta h_{ab} < 0.5^\circ$):
-   $$S_{\text{CMY}} = C + M + Y$$
-   $$\Delta_{\text{excess}} = (C + M + Y + K') - \text{TAC}_{\max}$$
-   $$C' = C - \left(\Delta_{\text{excess}} \times \frac{C}{S_{\text{CMY}}}\right)$$
-   $$M' = M - \left(\Delta_{\text{excess}} \times \frac{M}{S_{\text{CMY}}}\right)$$
-   $$Y' = Y - \left(\Delta_{\text{excess}} \times \frac{Y}{S_{\text{CMY}}}\right)$$
-4. Assert $C' + M' + Y' + K' \le \text{TAC}_{\max}$.
+   If remaining sum still exceeds TAC_max, subtract ink mass proportionally from C, M, Y to preserve the original chromatic hue angle (Δhab < 0.5°):
+   ```text
+S_CMY = C + M + Y
+Δ_excess = (C + M + Y + K') - TAC_max
+C' = C - (Δ_excess × C / S_CMY)
+M' = M - (Δ_excess × M / S_CMY)
+Y' = Y - (Δ_excess × Y / S_CMY)
+```
+4. Assert C' + M' + Y' + K' ≤ TAC_max.
 
-### 5.4 CIEDE2000 ($\Delta E_{00}$) Metric Verification
+### 5.4 CIEDE2000 (ΔE00) Metric Verification
 Every color transform is verified against reference PCS values using CIEDE2000:
-$$\Delta E_{00} = \sqrt{\left(\frac{\Delta L'}{k_L S_L}\right)^2 + \left(\frac{\Delta C'}{k_C S_C}\right)^2 + \left(\frac{\Delta H'}{k_H S_H}\right)^2 + R_T \left(\frac{\Delta C'}{k_C S_C}\right)\left(\frac{\Delta H'}{k_H S_H}\right)}$$
-Assertion invariant: $\Delta E_{00} \le 1.0$ (imperceptible to the standard human eye).
+```text
+ΔE00 = sqrt((ΔL' / (kL × SL))^2 + (ΔC' / (kC × SC))^2 + (ΔH' / (kH × SH))^2 + RT × (ΔC' / (kC × SC)) × (ΔH' / (kH × SH)))
+```
+Assertion invariant: ΔE00 ≤ 1.0 (imperceptible to the standard human eye).
 
 ### 5.5 Spot Color & DeviceN Subsystem
 Handles specialized print inks beyond four-color process CMYK:
@@ -342,22 +366,26 @@ Commercial offset print houses frequently burn press plates directly from discre
 
 ## 7. Layer 5: Memory Architecture & Streaming Pipeline
 
-- **Scanline Ring Buffers**: Image processing occurs in scanline bands or tiles (e.g. $256 \times 256$ pixels).
+- **Scanline Ring Buffers**: Image processing occurs in scanline bands or tiles (e.g. 256 × 256 pixels).
 - **Peak Heap Guarantee**:
-  $$\text{Memory}_{\text{peak}} \le N_{\text{threads}} \times \text{Tile Size} \times \text{Channels} \times \text{BytesPerSample} + \text{Static Overhead}$$
-  Peak memory remains bounded to $O(\text{chunk})$, eliminating heap scaling proportional to input file size.
+  ```text
+Memory_peak ≤ N_threads × Tile Size × Channels × BytesPerSample + Static Overhead
+```
+  Peak memory remains bounded to O(chunk), eliminating heap scaling proportional to input file size.
 - **Backpressure**: When downstream PDF/TIFF stream writing encounters I/O throttling, upstream decompression pauses reading disk chunks until write queues drain.
 
 ---
 
 ## 8. Layer 6: Security, Memory Safety & Fuzzing Invariants
 
-- **Safe Slicing & Offset Checks**: All buffer reads validate that $\text{offset} + \text{length} \le \text{buffer.length}$.
+- **Safe Slicing & Offset Checks**: All buffer reads validate that `offset + length ≤ buffer.length`.
 - **Integer Overflow Arithmetic**: Buffer allocation sizes calculated as:
-  $$\text{size} = \text{width} \times \text{height} \times \text{channels} \times \text{bytesPerSample}$$
+  ```text
+size = width × height × channels × bytesPerSample
+```
   are explicitly guarded using 64-bit integer limits before allocation.
-- **Hard Allocation Caps**: Rejects any individual allocation request claiming $> 2\text{ GB}$.
-- **Decompression Bomb Protection**: Tracks uncompressed byte expansion against raw input stream size. If expansion ratio exceeds $1000:1$ and total bytes exceed $500\text{ MB}$, processing is aborted immediately with a `DecompressionBombException`.
+- **Hard Allocation Caps**: Rejects any individual allocation request claiming > 2 GB.
+- **Decompression Bomb Protection**: Tracks uncompressed byte expansion against raw input stream size. If expansion ratio exceeds 1000:1 and total bytes exceed 500 MB, processing is aborted immediately with a `DecompressionBombException`.
 - **Malicious Fixture Corpus**: Continuous automated testing against adversarial fixtures: truncated headers, corrupted chunk CRCs, negative coordinates, and circular layer linkages.
 
 ---

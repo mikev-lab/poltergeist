@@ -26,7 +26,7 @@ Historically, the publishing industry has relied on Ghostscript for prepress nor
 
 **Poltergeist solves this permanently:**
 - **Zero External Runtime Dependencies** (`dependencies: {}`): Self-contained binary decoders and color math engines without native C bridges (`libpng`, `libjpeg`, `libtiff`, `lcms2`, `freetype`, `zlib`).
-- **Absolute Memory Safety**: V8 managed buffers, explicit integer overflow protection, allocation ceilings, and bounded streaming ($O(\text{scanline})$ / $O(\text{tile})$).
+- **Absolute Memory Safety**: V8 managed buffers, explicit integer overflow protection, allocation ceilings, and bounded streaming (O(scanline) / O(tile)).
 - **Elimination of the PostScript Attack Surface**: Poltergeist intentionally omits arbitrary Turing-complete PostScript execution, completely neutralizing path-traversal, sandbox-escape, and shellout vulnerabilities.
 - **Prepress Precision**: Full ICC v2/v4 color management, 3D LUT tetrahedral interpolation, Total Area Coverage (TAC) ink limiting (300% SWOP, 320% GRACoL), and subtractive overprint simulation (`-dSimulateOverprint`).
 - **Ghostscript 1:1 Parity**: Direct programmatic replacements for `-sDEVICE=pdfwrite`, `-sDEVICE=tiffsep`, `-dSimulateOverprint`, and `-dColorConversionStrategy=/DeviceCMYK`.
@@ -39,12 +39,12 @@ Poltergeist runs directly in-process inside the V8 engine, eliminating the 80–
 
 | Benchmark Scenario | Poltergeist Throughput | Wall-Clock Latency | Peak Heap Delta | Ghostscript Comparison |
 | :--- | :--- | :--- | :--- | :--- |
-| **Layer Compositing & Flattening** (5 RGBA layers) | **$522 - 740\text{ MP/s}$** ($2.0 - 2.8\text{ GB/s}$) | **$1.69 - 2.39\text{ ms}$** | $+0.00\text{ MB}$ | **$5\times - 10\times$ faster**; avoids PostScript graphics state stack |
-| **Discrete Plate Separation** (`tiffsep` CMYK) | **$61.7 - 63.1\text{ MP/s}$** ($235 - 241\text{ MB/s}$) | **$5.70\text{ ms}$** | $+0.17\text{ MB}$ | **$10\times - 20\times$ faster**; eliminates disk-bound TIFF serialization |
-| **Prepress Resampling** (Bicubic $600 \to 300\text{ DPI}$) | **$15.5 - 15.6\text{ MP/s}$** ($44.2 - 44.6\text{ MB/s}$) | **$41.0\text{ ms}$** | $+1.42\text{ MB}$ | **$2\times - 3\times$ faster**; precalculated fixed-point weights |
-| **Camera RAW Demosaicing** (Bayer RGGB 1 MP) | **$5.74 - 5.92\text{ MP/s}$** ($10.9 - 11.3\text{ MB/s}$) | **$168.9\text{ ms}$** | $+0.00\text{ MB}$ | Pure native bilateral color sensor interpolation |
-| **Color Management** (sRGB $\to$ CMYK 3D LUT + TAC) | **$2.91 - 2.95\text{ MP/s}$** ($8.3 - 8.4\text{ MB/s}$) | **$54.2\text{ ms}$** | $+10.18\text{ MB}$ | End-to-end latency parity without LittleCMS bridge costs |
-| **Damaged PDF Repair** (`pdfwrite` equivalent) | **$< 4\text{ ms}$** linear scan | **$3.58\text{ ms}$** | $+0.00\text{ MB}$ | **Instant and resilient**; self-healing xref reconstruction |
+| **Layer Compositing & Flattening** (5 RGBA layers) | **522 – 740 MP/s** (2.0 – 2.8 GB/s) | **1.69 – 2.39 ms** | +0.00 MB | **5x – 10x faster**; avoids PostScript graphics state stack |
+| **Discrete Plate Separation** (`tiffsep` CMYK) | **61.7 – 63.1 MP/s** (235 – 241 MB/s) | **5.70 ms** | +0.17 MB | **10x – 20x faster**; eliminates disk-bound TIFF serialization |
+| **Prepress Resampling** (Bicubic 600 → 300 DPI) | **15.5 – 15.6 MP/s** (44.2 – 44.6 MB/s) | **41.0 ms** | +1.42 MB | **2x – 3x faster**; precalculated fixed-point weights |
+| **Camera RAW Demosaicing** (Bayer RGGB 1 MP) | **5.74 – 5.92 MP/s** (10.9 – 11.3 MB/s) | **168.9 ms** | +0.00 MB | Pure native bilateral color sensor interpolation |
+| **Color Management** (sRGB → CMYK 3D LUT + TAC) | **2.91 – 2.95 MP/s** (8.3 – 8.4 MB/s) | **54.2 ms** | +10.18 MB | End-to-end latency parity without LittleCMS bridge costs |
+| **Damaged PDF Repair** (`pdfwrite` equivalent) | **< 4 ms** linear scan | **3.58 ms** | +0.00 MB | **Instant and resilient**; self-healing xref reconstruction |
 
 > See [Performance Benchmarks](docs/testing/benchmarks.md) for full benchmark methodology and regression budgets.
 
@@ -97,7 +97,7 @@ Ingestion (25+ Formats)
 npm install poltergeist
 ```
 
-*(Requires Node.js $\ge 22.0.0$)*
+*(Requires Node.js ≥ 22.0.0)*
 
 ---
 
@@ -240,7 +240,7 @@ npm run benchmark
 
 - **266/266 tests passing** across 47 suites.
 - Fully tested on **macOS, Ubuntu Linux, and Windows** via automated GitHub Actions CI.
-- Fuzzing suite covering truncated buffers, integer overflow attacks ($65535 \times 65535$), Zip-Slip directory traversals, and decompression bombs.
+- Fuzzing suite covering truncated buffers, integer overflow attacks (65535 × 65535), Zip-Slip directory traversals, and decompression bombs.
 
 ---
 

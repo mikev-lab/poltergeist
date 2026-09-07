@@ -7,13 +7,13 @@ This document specifies the architecture of the **1:1 Page-for-Page Streaming As
 ## 1. Architectural Mission: "Provide X, Get X"
 
 Poltergeist enforces a strict 1:1 transformation paradigm:
-1. **Zero Imposition Mutation**: Input documents containing $N$ pages are output as exactly $N$ pages. Poltergeist does not artificially alter reader order, impose saddle-stitching, or fold spreads unless explicitly configured.
+1. **Zero Imposition Mutation**: Input documents containing N pages are output as exactly N pages. Poltergeist does not artificially alter reader order, impose saddle-stitching, or fold spreads unless explicitly configured.
 2. **Exact Geometry Preservation**:
    - `MediaBox`: The physical paper boundaries.
    - `CropBox`: The default viewing and clipping region.
    - `BleedBox`: The expanded printing boundary accommodating press trim variations.
    - `TrimBox`: The finished trimmed page edge.
-3. **Bounded Memory Footprint ($O(\text{page})$)**: Large multi-page documents (e.g. 500-page catalogs or multi-gigabyte files) must not load all rasterized page buffers into memory simultaneously. Each page is processed sequentially and unreferenced for immediate garbage collection.
+3. **Bounded Memory Footprint (O(page))**: Large multi-page documents (e.g. 500-page catalogs or multi-gigabyte files) must not load all rasterized page buffers into memory simultaneously. Each page is processed sequentially and unreferenced for immediate garbage collection.
 
 ---
 

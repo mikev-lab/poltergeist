@@ -27,7 +27,7 @@
 
 ## 3. Bayer CFA Sensel Geometry
 
-Digital sensors capture single-channel light intensity filtered through a Color Filter Array (CFA). Poltergeist models all four standard $2 \times 2$ Bayer repeating tessellations:
+Digital sensors capture single-channel light intensity filtered through a Color Filter Array (CFA). Poltergeist models all four standard 2 × 2 Bayer repeating tessellations:
 
 ```text
   RGGB:            BGGR:            GRBG:            GBRG:
@@ -35,8 +35,10 @@ Digital sensors capture single-channel light intensity filtered through a Color 
   [ G  B ]         [ G  R ]         [ B  G ]         [ R  G ]
 ```
 
-Sensel channel mapping at coordinate $(row, col)$ is computed via bitwise mask:
-$$r = row \ \& \ 1, \quad c = col \ \& \ 1$$
+Sensel channel mapping at coordinate (row, col) is computed via bitwise mask:
+```text
+r = row & 1,  c = col & 1
+```
 
 ---
 
@@ -45,13 +47,19 @@ $$r = row \ \& \ 1, \quad c = col \ \& \ 1$$
 ### 4.1 Bilinear Interpolation with Boundary Clamping
 To convert single-channel sensel mosaic buffers into continuous 24-bit RGB raster frames:
 1. **Sensel Value Normalization**:
-   $$V_{\text{norm}} = \min\left(1.0, \frac{\max(0, \text{raw} - \text{blackLevel})}{\text{whiteLevel} - \text{blackLevel}} \times \text{wbGain}\right)$$
+   ```text
+V_norm = min(1.0, ((V_raw - blackLevel) / (whiteLevel - blackLevel)) × wbGain)
+```
 2. **Missing Channel Reconstruction**:
-   - **At Red Sensel**: Green is interpolated from 4 cross neighbors $(r \pm 1, c)$ and $(r, c \pm 1)$. Blue is interpolated from 4 diagonal neighbors $(r \pm 1, c \pm 1)$.
+   - **At Red Sensel**: Green is interpolated from 4 cross neighbors (r ± 1, c) and (r, c ± 1). Blue is interpolated from 4 diagonal neighbors (r ± 1, c ± 1).
    - **At Blue Sensel**: Green is interpolated from 4 cross neighbors. Red is interpolated from 4 diagonal neighbors.
    - **At Green Sensel**: Red and Blue are interpolated from orthogonal neighbors depending on whether the adjacent horizontal row sensels are Red or Blue.
 
 ### 4.2 Linear to sRGB Tone Curve Application
-The raw linear radiometric intensity $V \in [0, 1]$ is converted to standardized sRGB ($D_{65}$) transfer function:
-$$sRGB = \begin{cases} 12.92 \times V & V \le 0.0031308 \\ 1.055 \times V^{1/2.4} - 0.055 & V > 0.0031308 \end{cases}$$
-Output is rounded to 8-bit unsigned integer $[0..255]$ for direct ingestion into the Poltergeist prepress color transformation pipeline.
+The raw linear radiometric intensity V in [0, 1] is converted to standardized sRGB (D65) transfer function:
+```text
+sRGB Transfer Function:
+sRGB = 12.92 × V                  (if V ≤ 0.0031308)
+sRGB = 1.055 × V^(1/2.4) - 0.055 (if V > 0.0031308)
+```
+Output is rounded to 8-bit unsigned integer [0..255] for direct ingestion into the Poltergeist prepress color transformation pipeline.

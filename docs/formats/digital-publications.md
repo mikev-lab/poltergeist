@@ -20,15 +20,21 @@
 
 ### 3.1 Natural Alphanumeric Page Sorting
 Lexicographical string sorting in naive decoders corrupts comic reading order:
-$$\text{Lexical Order: } \text{Page\_1.png} \to \text{Page\_10.png} \to \text{Page\_2.png} \quad (\text{Incorrect})$$
+```text
+Lexical Order:  Page_1.png → Page_10.png → Page_2.png  (Incorrect)
+```
 Poltergeist enforces natural numeric collation via locale-aware integer parsing:
-$$\text{Natural Order: } \text{Page\_1.png} \to \text{Page\_2.png} \to \text{Page\_10.png} \quad (\text{Preserved})$$
+```text
+Natural Order:  Page_1.png → Page_2.png  → Page_10.png (Preserved)
+```
 
 ### 3.2 Double-Page Spread Detection
 Comic artists regularly compose two-page horizontal splash spreads. For every decoded raster page, the aspect ratio is evaluated:
-$$\text{aspectRatio} = \frac{\text{width}}{\text{height}}$$
-- If $\text{aspectRatio} > 1.2$, the page is flagged with `isSpread: true` and mapped to landscape media box geometry.
-- If $\text{aspectRatio} \le 1.2$, the page is treated as standard portrait orientation.
+```text
+aspectRatio = width / height
+```
+- If aspectRatio > 1.2, the page is flagged with `isSpread: true` and mapped to landscape media box geometry.
+- If aspectRatio ≤ 1.2, the page is treated as standard portrait orientation.
 
 ### 3.3 ComicInfo.xml Metadata Extraction
 If an internal `ComicInfo.xml` schema is present in the archive root, Dublin Core and comic metadata are parsed:

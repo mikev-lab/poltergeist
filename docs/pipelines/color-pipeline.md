@@ -4,7 +4,7 @@
 
 The Poltergeist Color Pipeline handles the conversion of raster imagery from additive RGB color spaces (sRGB, Adobe RGB 1998, Display P3) to subtractive CMYK color spaces (e.g. GRACoL 2006, SWOP 2006 Coated, ISO Coated v2) required by commercial prepress offset and digital presses.
 
-Unlike simplistic heuristic conversions ($C = 1 - R, M = 1 - G, Y = 1 - B, K = \min(C, M, Y)$) which yield muddy, desaturated, and unprintable results, Poltergeist utilizes an ICC-calibrated transformation engine paired with prepress ink limiting algorithms.
+Unlike simplistic heuristic conversions ((C = 1 - R, M = 1 - G, Y = 1 - B, K = min(C, M, Y))) which yield muddy, desaturated, and unprintable results, Poltergeist utilizes an ICC-calibrated transformation engine paired with prepress ink limiting algorithms.
 
 ---
 
@@ -38,7 +38,7 @@ Unlike simplistic heuristic conversions ($C = 1 - R, M = 1 - G, Y = 1 - B, K = \
 ### Stage 2 & 4: Profile Connection Space (PCS) & Multidimensional LUTs
 - The PCS operates in either 16-bit CIEXYZ or CIELAB.
 - For LUT-based profiles (`mft1`, `mft2`, `mABType`, `mBAType`):
-  - Input curves (1D) $\to$ Matrix (if XYZ) $\to$ Multidimensional CLUT (3D grid: e.g., $33 \times 33 \times 33$) $\to$ Output curves (1D).
+  - Input curves (1D) → Matrix (if XYZ) → Multidimensional CLUT (3D grid: e.g., 33 × 33 × 33) → Output curves (1D).
   - Interpolation within the 3D CLUT is executed via **tetrahedral interpolation**, which reduces color banding and preserves tonal smoothness compared to trilinear interpolation.
 
 ### Stage 3: Rendering Intents
@@ -53,40 +53,51 @@ Poltergeist supports standard ICC rendering intents:
 
 ### 3.1 The TAC Problem
 Commercial offset lithography and high-speed digital web presses place physical limits on wet ink density. The sum of all four ink percentages:
-$$\text{TAC} = C\% + M\% + Y\% + K\%$$
+```text
+TAC = C% + M% + Y% + K%
+```
 Excessive TAC (>300–340% depending on paper stock) causes ink offsetting, sheet sticking, paper curling, long drying times, and press jams.
 
 | Paper / Standard | Common Specification | Maximum Safe TAC |
 | :--- | :--- | :--- |
-| **GRACoL 2006 / 2013** | Sheetfed commercial coated paper | $320\%$ |
-| **SWOP 2006 Coated** | Web publication coated paper | $300\%$ |
-| **ISO Coated v2 (FOGRA39)** | European sheetfed commercial | $330\%$ |
-| **Uncoated / Newsprint** | High absorption substrates | $240\% - 280\%$ |
+| **GRACoL 2006 / 2013** | Sheetfed commercial coated paper | 320% |
+| **SWOP 2006 Coated** | Web publication coated paper | 300% |
+| **ISO Coated v2 (FOGRA39)** | European sheetfed commercial | 330% |
+| **Uncoated / Newsprint** | High absorption substrates | 240% - 280% |
 
 ### 3.2 UCR / GCR Algorithm Invariant
-When a pixel's combined ink sum exceeds the configured target limit ($\text{TAC}_{\text{actual}} > \text{TAC}_{\text{limit}}$):
+When a pixel's combined ink sum exceeds the configured target limit (TAC_actual > TAC_limit):
 1. **Delta Calculation**:
-   $$\Delta_{\text{excess}} = (C + M + Y + K) - \text{TAC}_{\text{limit}}$$
+   ```text
+Δ_excess = (C + M + Y + K) - TAC_limit
+```
 2. **Gray Component Replacement (GCR)**:
    - Identify the minimum chromatic component:
-     $$M_{\text{neutral}} = \min(C, M, Y)$$
-   - Calculate replaceable neutral density and shift ink mass from the three expensive chromatic plates ($C, M, Y$) to the Black ($K$) plate.
+     ```text
+M_neutral = min(C, M, Y)
+```
+   - Calculate replaceable neutral density and shift ink mass from the three expensive chromatic plates (C, M, Y) to the Black (K) plate.
 3. **Under Color Removal (UCR)**:
-   - In deep shadow regions where $K$ is already near saturation ($K \to 100\%$), subtract proportionally from $C, M, Y$ maintaining chromatic ratios to avoid color tinting:
-     $$C' = C - \left(\Delta_{\text{excess}} \times \frac{C}{C + M + Y}\right)$$
-     $$M' = M - \left(\Delta_{\text{excess}} \times \frac{M}{C + M + Y}\right)$$
-     $$Y' = Y - \left(\Delta_{\text{excess}} \times \frac{Y}{C + M + Y}\right)$$
+   - In deep shadow regions where K is already near saturation (K → 100%), subtract proportionally from C, M, Y maintaining chromatic ratios to avoid color tinting:
+     ```text
+C' = C - (Δ_excess × C / (C + M + Y))
+M' = M - (Δ_excess × M / (C + M + Y))
+Y' = Y - (Δ_excess × Y / (C + M + Y))
+```
+     
 4. **Validation**:
-   - Assert $C' + M' + Y' + K' \le \text{TAC}_{\text{limit}}$.
-   - Assert hue angle $\Delta h_{ab}$ remains below $0.5^\circ$.
+   - Assert C' + M' + Y' + K' ≤ TAC_limit.
+   - Assert hue angle Δhab remains below 0.5°.
 
 ---
 
 ## 4. Color Metric Tolerances (Delta E)
 
-Every color separation implementation must be validated against reference conversions using the **CIEDE2000 ($\Delta E_{00}$)** color difference formula:
-$$\Delta E_{00} \le 1.0 \quad (\text{Imperceptible to standard human eye})$$
-Color separations yielding $\Delta E_{00} > 1.5$ fail automated test assertions.
+Every color separation implementation must be validated against reference conversions using the **CIEDE2000 (ΔE00)** color difference formula:
+```text
+ΔE00 ≤ 1.0 (Imperceptible to standard human eye)
+```
+Color separations yielding ΔE00 > 1.5 fail automated test assertions.
 
 ---
 
@@ -96,7 +107,9 @@ Prepress workflows frequently incorporate specialized non-process inks:
 - **DeviceN & Separation Color Spaces**: Evaluates named spot colors (e.g. `PANTONE 185 C`, `PANTONE Reflex Blue C`, `Metallic Gold`, `Spot White`, `Varnish`, `CutContour`).
 - **TintTransform Evaluation**:
   When outputting to 4-color CMYK presses, Poltergeist evaluates the profile TintTransform function (sampled 1D functions or PostScript calculator functions) to calculate process CMYK equivalents:
-  $$f_{\text{tint}}: [0.0, 1.0] \to [C, M, Y, K]$$
+  ```text
+f_tint: [0.0, 1.0] → [C, M, Y, K]
+```
 - **Plate Channel Isolation**: When targeting discrete platesetter files (`tiffsep`), spot colors bypass CMYK transformation and are preserved as discrete grayscale 8-bit or 1-bit separation bitmaps.
 
 ---
@@ -105,7 +118,10 @@ Prepress workflows frequently incorporate specialized non-process inks:
 
 In physical offset printing, inks set to "Overprint" (`/OP true`, `/op true`) do not knock out the underlying colors on lower plates:
 - **Subtractive Ink Mixing Simulation**:
-  When Overprint Mode ($OPM = 1$) is active in PDF graphics states, foreground ink channels overlay background channels subtractively rather than replacing them:
-  $$C_{\text{final}} = \begin{cases} C_{\text{fg}} & \text{if foreground defines } C \\ C_{\text{bg}} & \text{if foreground channel is unset or transparent} \end{cases}$$
+  When Overprint Mode (OPM = 1) is active in PDF graphics states, foreground ink channels overlay background channels subtractively rather than replacing them:
+  ```text
+C_final = C_fg  (if foreground defines C)
+C_final = C_bg  (if foreground does not define C - overprint)
+```
 - **Soft Proof Rendering**: Overprint simulation allows digital proofing JPEGs and TIFFs to visually display the true composite appearance of overprinting black text and spot varnish elements as they will appear on press.
 

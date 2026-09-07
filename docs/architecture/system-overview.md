@@ -2,11 +2,11 @@
 
 ## 1. Executive Summary
 
-**Poltergeist** is a memory-safe, zero-dependency file handling and prepress conversion suite designed to replace Ghostscript in high-throughput production environments. It ingests raster and layered graphic assets (PNG, PSD, Clip Studio Paint `.clip`, IDML packages), document and office layouts (OpenXML, Apple iWork, ODF, PostScript, EPS), digital publications (CBZ, CBR, EPUB), CAD schematics (DWG, DXF), and camera RAW digital negatives, executing color separations (RGB $\to$ CMYK) under strict ICC profiles, enforcing prepress Total Area Coverage (TAC) ink limits, and outputting print-ready PDF/X, JPEG, and TIFF files.
+**Poltergeist** is a memory-safe, zero-dependency file handling and prepress conversion suite designed to replace Ghostscript in high-throughput production environments. It ingests raster and layered graphic assets (PNG, PSD, Clip Studio Paint `.clip`, IDML packages), document and office layouts (OpenXML, Apple iWork, ODF, PostScript, EPS), digital publications (CBZ, CBR, EPUB), CAD schematics (DWG, DXF), and camera RAW digital negatives, executing color separations (RGB → CMYK) under strict ICC profiles, enforcing prepress Total Area Coverage (TAC) ink limits, and outputting print-ready PDF/X, JPEG, and TIFF files.
 
 Ghostscript has historically suffered from critical security vulnerabilities (memory corruption, arbitrary code execution, and unvalidated postscript evaluation) and unpredictable memory footprints. Poltergeist eliminates these risks by enforcing:
 - **Pure Self-Contained Implementations**: Zero dynamic linking to C/C++ libraries (libpng, libjpeg, LittleCMS, Ghostscript, dcraw, unrar).
-- **Strict Memory Bounding**: Stream- and scanline-based chunking that limits memory overhead to $O(\text{chunk})$, preventing out-of-memory crashes on multi-gigabyte files.
+- **Strict Memory Bounding**: Stream- and scanline-based chunking that limits memory overhead to O(chunk), preventing out-of-memory crashes on multi-gigabyte files.
 - **Mathematical Color Determinism**: Bit-identical or floating-point epsilon bounded color conversion across all platforms (macOS, Linux, Windows).
 - **Commercial Prepress Compliance**: Complete alignment with digital print and offset commercial submission requirements, including all accepted Mixam formats and Clip Studio Paint (`.clip`).
 
@@ -61,7 +61,7 @@ Poltergeist classifies all supported file formats into dedicated, decoupled deco
 ### 2.2 Compositing & Rasterization Engine (`src/compositor/`)
 - Blends layered assets, vector paths, and document frames into unified composite pages.
 - Implements Porter-Duff compositing operators, clipping masks, and layer opacity blending.
-- **Prepress Image Resampling**: Bicubic and Lanczos-3 separable filtering to downsample oversized raster assets (>450 DPI $\to$ 300 DPI target).
+- **Prepress Image Resampling**: Bicubic and Lanczos-3 separable filtering to downsample oversized raster assets (>450 DPI → 300 DPI target).
 - **PDF/X-1a Transparency Flattening**: Decomposes overlapping transparent vector/raster elements into atomic non-overlapping regions, rasterizing complex blend modes into contone CMYK sub-tiles while preserving non-transparent vector text and lines.
 - **Font Outlining & Vector Conversion**: Decompiles TrueType (`glyf`), OpenType (CFF/CFF2), and Type 1 glyph outlines into native vector path primitives (`M`, `C`, `L`, `Z`), guaranteeing complete immunity to missing fonts on downstream RIPs.
 - Preserves native page geometry and coordinate boxes without imposition alteration ("Provide X, Get X").
@@ -69,10 +69,10 @@ Poltergeist classifies all supported file formats into dedicated, decoupled deco
 
 ### 2.3 Color Management Engine (`src/color/`)
 - **ICC Profile Parser**: Parses ICC.1:2010 (v4.3) and ICC.1:2001-04 (v2) binary profiles. Extracts header fields, tag table, and tag data (curves, `A2B0`, `B2A0`, `mft1`, `mft2`, `mAB`/`mBA` multi-dimensional LUTs).
-- **Color Transform Pipeline**: Converts source RGB $\to$ CIEXYZ/CIELAB $\to$ target CMYK using tetrahedral interpolation through 3D/4D LUTs.
-- **Prepress TAC Enforcement**: Enforces Total Area Coverage (e.g., 300% for SWOP, 320% for GRACoL). When $C + M + Y + K > \text{TAC}_{\max}$, applies Under Color Removal (UCR) and Gray Component Replacement (GCR) to reduce CMY ink while maintaining neutrality and density via the Black (K) plate.
+- **Color Transform Pipeline**: Converts source RGB → CIEXYZ/CIELAB → target CMYK using tetrahedral interpolation through 3D/4D LUTs.
+- **Prepress TAC Enforcement**: Enforces Total Area Coverage (e.g., 300% for SWOP, 320% for GRACoL). When C + M + Y + K > TAC_max, applies Under Color Removal (UCR) and Gray Component Replacement (GCR) to reduce CMY ink while maintaining neutrality and density via the Black (K) plate.
 - **Spot Colors & DeviceN**: Ingests named spot inks (`PANTONE`, `Spot UV`, `CutContour`), applying profile TintTransform functions to CMYK or preserving discrete spot channels.
-- **Overprint Simulation (`-dSimulateOverprint`)**: Implements subtractive ink layering models ($OPM = 1$) to simulate physical ink mixing on printing plates for soft proofing.
+- **Overprint Simulation (`-dSimulateOverprint`)**: Implements subtractive ink layering models (OPM = 1) to simulate physical ink mixing on printing plates for soft proofing.
 
 ### 2.4 Export & Encoding Layer (`src/export/`)
 - **PDF/X Generator**: Emits standard-compliant PDF/X-1a:2001 and PDF/X-4:2010 print files with embedded CMYK image streams, TrimBox/BleedBox geometry, and OutputIntent ICC dictionaries.

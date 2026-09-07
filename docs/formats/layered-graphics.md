@@ -16,8 +16,8 @@ Adobe Photoshop documents use a proprietary binary container format consisting o
 ### 1.1 Header Specification
 - **Magic**: `8BPS` (`0x38, 0x42, 0x50, 0x53`).
 - **Version**:
-  - `1`: Standard Photoshop PSD (maximum dimensions: $30,000 \times 30,000\text{ px}$). 32-bit channel and section lengths.
-  - `2`: Photoshop Large Document Format PSB (maximum dimensions: $300,000 \times 300,000\text{ px}$). 64-bit channel and section lengths.
+  - `1`: Standard Photoshop PSD (maximum dimensions: 30,000 × 30,000 px). 32-bit channel and section lengths.
+  - `2`: Photoshop Large Document Format PSB (maximum dimensions: 300,000 × 300,000 px). 64-bit channel and section lengths.
 - **Channels**: 1 to 56.
 - **Bit Depth**: 1, 8, 16, or 32 bits per channel.
 - **Color Mode**: Bitmap (0), Grayscale (1), Indexed (2), RGB (3), CMYK (4), Multi-channel (7), Duotone (8), Lab (9).
@@ -36,8 +36,8 @@ Adobe Photoshop documents use a proprietary binary container format consisting o
   - Channel info entries: channel ID (int16: 0=R/C, 1=G/M, 2=B/Y, 3=K, -1=transparency mask, -2=user layer mask) + length (uint32 in PSD, uint64 in PSB).
   - Blend mode signature: `8BIM`.
   - Blend key: 4-character ASCII code (`norm`, `mul `, `scrn`, `over`, `dark`, `lite`, `div `, `idiv`, `hLit`, `sLit`, `diff`, `smud`).
-  - Opacity: 1 byte ($0 \dots 255$).
-  - Clipping flag: 1 byte ($0 = \text{base}, 1 = \text{clip}$).
+  - Opacity: 1 byte (0 ... 255).
+  - Clipping flag: 1 byte (0 = base, 1 = clip).
   - Flags: bit 1 (0 = visible, 1 = hidden).
 - **Channel Compression**:
   - `0`: Raw uncompressed bytes.
@@ -52,12 +52,12 @@ Adobe Photoshop documents use a proprietary binary container format consisting o
 Clip Studio Paint (`.clip`) files are SQLite 3 relational database files containing proprietary tables. To uphold Poltergeist's **Rule 7 (Zero External Runtime Dependencies)**, Poltergeist incorporates a pure native, memory-safe SQLite 3 B-Tree reader.
 
 ### 2.1 Native SQLite B-Tree Reader Architecture (`sqlite_reader.js`)
-- **100-byte Database Header**: Validates magic string `SQLite format 3\0`, page size ($512 \le \text{pageSize} \le 65536$), and file change counters.
+- **100-byte Database Header**: Validates magic string `SQLite format 3\0`, page size (512 ≤ pageSize ≤ 65536), and file change counters.
 - **Page Traversal**:
   - `0x0D`: Table B-Tree Leaf Page. Reads cell pointers array, extracts row varints, and decodes record payloads.
   - `0x05`: Table B-Tree Interior Page. Traverses left and right child page pointers.
 - **Varint Decoding**: Reads 1 to 9-byte SQLite variable integers.
-- **Payload Deserializer**: Handles NULL (0), 8-bit to 64-bit signed integers (1–6), IEEE 754 float64 (7), 0/1 constants (8, 9), BLOBs (even serial types $\ge 12$), and UTF-8 strings (odd serial types $\ge 13$).
+- **Payload Deserializer**: Handles NULL (0), 8-bit to 64-bit signed integers (1–6), IEEE 754 float64 (7), 0/1 constants (8, 9), BLOBs (even serial types ≥ 12), and UTF-8 strings (odd serial types ≥ 13).
 - **Catalog Navigation**: Parses `sqlite_master` on Page 1 to locate root pages for target tables.
 
 ### 2.2 Table Schemas

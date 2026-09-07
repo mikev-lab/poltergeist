@@ -12,7 +12,7 @@ Welcome to the **Poltergeist** technical documentation. Poltergeist is a memory-
 - **[Engineering Roadmap](architecture/roadmap.md)**: Six-phase engineering milestones, deliverables, and completion status.
 - **[Color Separation & Prepress Pipeline](pipelines/color-pipeline.md)**: ICC v2/v4 parsing, 3D LUT tetrahedral interpolation, Total Area Coverage (TAC) ink limiting via UCR/GCR, DeviceN spot colors, and overprint simulation (`-dSimulateOverprint`).
 - **[Transparency Flattening & Font Outlining](pipelines/transparency-and-fonts.md)**: PDF/X-1a atomic region decomposition, sub-tile contone rasterization, and TrueType/OpenType glyph outline decompilation.
-- **[Document Streaming Pipeline](pipelines/document-stream-pipeline.md)**: 1:1 sequential multi-page assembler with bounded $O(\text{page})$ memory consumption.
+- **[Document Streaming Pipeline](pipelines/document-stream-pipeline.md)**: 1:1 sequential multi-page assembler with bounded O(page) memory consumption.
 
 ---
 

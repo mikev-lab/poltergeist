@@ -11,15 +11,15 @@ Every parser, mathematical transform, and encoder must have tests across three d
    - Valid, specification-compliant files (standard PNG-24 with alpha, multi-layer PSD CS6 with masks, valid IDML spreads).
    - Verifies expected pixel dimensions, color channel values, layer geometry, and ICC profile extraction.
 2. **Tier 2: Deep Edge Cases**
-   - Single-pixel images ($1 \times 1$).
-   - Extreme aspect ratios ($1 \times 65535$, $65535 \times 1$).
+   - Single-pixel images (1 × 1).
+   - Extreme aspect ratios (1 × 65535, 65535 × 1).
    - 16-bit and 32-bit channel precision boundaries.
    - Max TAC saturation (100% C + 100% M + 100% Y + 100% K = 400% TAC).
    - Empty layer groups, hidden layers, disabled mask channels.
    - Missing or truncated ICC profile metadata (fallback to standard profiles).
 3. **Tier 3: Malicious & Adversarial Fuzzing**
    - Truncated file buffers (simulating incomplete network downloads or disk cuts).
-   - Header bomb values: dimensions declared as $4\text{GB} \times 4\text{GB}$ with tiny payload.
+   - Header bomb values: dimensions declared as 4 GB × 4 GB with tiny payload.
    - Corrupt CRC32 values in PNG chunks.
    - Invalid RLE scanline byte runs in PSD channels.
    - Out-of-bounds layer bounding boxes (negative coordinates, coordinates exceeding image dimensions).

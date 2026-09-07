@@ -15,8 +15,8 @@ While Ghostscript has historically been the prepress industry standard, its unma
 | **Execution Language** | C99 / PostScript (Unmanaged, manual pointers) | Pure JavaScript / Node.js LTS (V8 memory-managed) |
 | **Runtime Dependencies** | `libtiff`, `libjpeg`, `libpng`, `lcms2`, `freetype`, `zlib` | **Zero external dependencies** (`dependencies: {}`) |
 | **Security Surface** | Vulnerable to arbitrary code execution via PostScript | **Zero Turing-complete PostScript execution**; deterministic data pipelines |
-| **Memory Architecture** | Unbounded heap spikes; whole-image unmanaged allocations | Chunked scanline/tile processing; $O(\text{scanline})$ / $O(\text{tile})$ bounds |
-| **Allocation Guardrails** | Susceptible to integer overflow wraps (`malloc(w * h * bpp)`) | Explicit dimension caps ($65535$), $2\text{ GB}$ buffer allocation ceilings |
+| **Memory Architecture** | Unbounded heap spikes; whole-image unmanaged allocations | Chunked scanline/tile processing; O(scanline) / O(tile) bounds |
+| **Allocation Guardrails** | Susceptible to integer overflow wraps (`malloc(w * h * bpp)`) | Explicit dimension caps (65535), 2 GB buffer allocation ceilings |
 | **Format Coverage** | PostScript, PDF, EPS, limited raster | Universal: 25+ raster, layered (PSD, CLIP), CAD, RAW, Office, comics |
 | **Input Sniffing** | File extension or PostScript headers | Deep binary magic number sniffing & header introspection |
 
