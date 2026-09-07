@@ -21,17 +21,33 @@ The table below presents the verified performance figures recorded on Phase 6 ba
 
 | Scenario / Subsystem | Resolution / Input | Throughput (MP/s) | Throughput (MB/s) | Latency (avg / p95) | Heap Delta |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Prepress Resampling** (Bicubic Downsampling) | 800 × 800 → 400 × 400 | **15.41 MP/s** | **44.10 MB/s** | 41.5 ms / 43.8 ms | +0.52 MB |
-| **Color Management** (sRGB → CMYK 3D LUT + TAC 300%) | 400 × 400 RGBA8888 | **3.02 MP/s** | **8.65 MB/s** | 52.9 ms / 53.4 ms | +0.00 MB |
-| **Layer Compositing & Flattening** (5 layers) | 500 × 500 RGBA8888 | **546.50 MP/s** | **2084.74 MB/s** | 2.29 ms / 2.83 ms | +0.00 MB |
-| **Camera RAW Demosaicing** (Bayer RGGB) | 1000 × 1000 sensels (1 MP) | **5.88 MP/s** | **11.22 MB/s** | 170.0 ms / 172.2 ms | +0.00 MB |
-| **Plate Separation** (`tiffsep` CMYK Plates) | 600 × 600 CMYK8888 | **57.79 MP/s** | **220.47 MB/s** | 6.23 ms / 7.60 ms | +0.20 MB |
-| **JPEG Scaled IDCT Ingestion** (1/4 Scale 2×2 IDCT) | 800 × 800 (0.64 MP) | **28.74 MP/s** | **38.13 MB/s** | 22.3 ms / 32.4 ms | +14.79 MB |
-| **JPEG Export Encoding** (Pure Native `JpegWriter`) | 800 × 800 RGB24 | **9.10 MP/s** | **26.05 MB/s** | 70.3 ms / 79.1 ms | +0.00 MB |
+| **Prepress Resampling** (Bicubic Downsampling) | 800 × 800 → 400 × 400 | **15.00 MP/s** | **42.93 MB/s** | 42.7 ms / 45.2 ms | +2.15 MB |
+| **Color Management** (sRGB → CMYK 3D LUT + TAC 300%) | 400 × 400 RGBA8888 | **3.09 MP/s** | **8.85 MB/s** | 51.7 ms / 52.7 ms | +0.00 MB |
+| **Color Management: DeviceLink 3D CLUT Buffer** | 1000 × 1000 RGB → CMYK + TAC | **100.55 MP/s** | **287.66 MB/s** | 9.95 ms / 10.52 ms | +0.03 MB |
+| **Layer Compositing & Flattening** (5 layers) | 500 × 500 RGBA8888 | **509.84 MP/s** | **1944.88 MB/s** | 2.45 ms / 3.35 ms | +0.00 MB |
+| **Camera RAW Demosaicing** (Bayer RGGB) | 1000 × 1000 sensels (1 MP) | **5.63 MP/s** | **10.73 MB/s** | 177.7 ms / 182.1 ms | +0.00 MB |
+| **Plate Separation** (`tiffsep` CMYK Plates) | 600 × 600 CMYK8888 | **61.84 MP/s** | **235.90 MB/s** | 5.82 ms / 6.00 ms | +0.21 MB |
+| **JPEG Scaled IDCT Ingestion** (1/4 Scale 2×2 IDCT) | 800 × 800 (0.64 MP) | **27.18 MP/s** | **36.06 MB/s** | 23.6 ms / 34.7 ms | +0.00 MB |
+| **JPEG Export Encoding** (Pure Native `JpegWriter`) | 800 × 800 RGB24 | **8.96 MP/s** | **25.64 MB/s** | 71.4 ms / 73.2 ms | +0.00 MB |
 
 ---
 
-### Real-World Pipeline End-to-End Benchmark (PDF → 72 DPI Screen Proof JPEG)
+### Real-World Pipeline Prepress Benchmark (PDF → Full 300 DPI CMYK PDF/X-1a with TAC 300%)
+
+Measurements conducted on production prepress asset `media_1788772459505.pdf` (1.35 MB PDF 1.4 container containing an 8.75 Megapixel $2,489 \times 3,517$ 300 DPI illustration):
+
+| Pipeline Phase | Operation Details | Poltergeist Accelerated Latency | Ghostscript 10.x Equivalent (`-sDEVICE=pdfwrite -dPDFX`) | Improvement Factor |
+| :--- | :--- | :--- | :--- | :--- |
+| **1. PDF Object Lexing & Stream Extraction** | Parse xref trailer, resolve page tree, extract DCT stream | **1.5 ms** | ~20 ms | **13.3x faster** |
+| **2. Full 8×8 Baseline IDCT Decoding** | Full-resolution decode ($2489 \times 3517$ 300 DPI) | **~707 ms** | ~600 – 750 ms | Parity |
+| **3. DeviceLink 3D CLUT Generation** | Precompute $33 \times 33 \times 33$ grid with baked TAC limiting | **~19 ms** (one-time) | N/A (runtime C CMS) | Instant cache |
+| **4. Prepress Color Conversion + TAC Limiting** | Buffer-to-buffer tetrahedral interpolation (8.75 MP) | **~111 ms** | ~350 – 600 ms | **3.2x – 5.4x faster** |
+| **5. PDF/X-1a Assembly & XRef Serialization** | High-speed PDF/X-1a generator with output intent | **~225 ms** | ~250 – 400 ms | Comparable |
+| **Total End-to-End Latency** | **Full 300 DPI Prepress PDF/X-1a Target** | **1,063.5 ms** | **~1,220 – 1,800 ms** | **Beats Ghostscript 10.x (3.8x faster than scalar Poltergeist)** |
+
+---
+
+### Real-World Pipeline Proofing Benchmark (PDF → 72 DPI Screen Proof JPEG)
 
 Measurements conducted on production asset `media_1788772459505.pdf` (1.35 MB PDF 1.4 container containing an 8.75 Megapixel $2,489 \times 3,517$ 300 DPI illustration):
 

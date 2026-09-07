@@ -10,7 +10,7 @@
     <img src="https://img.shields.io/badge/Node.js-%3E%3D22.0.0-339933?logo=node.js&logoColor=white" alt="Node.js Version">
     <img src="https://img.shields.io/badge/dependencies-0-success.svg?style=flat&color=2ea44f" alt="Zero Dependencies">
     <img src="https://img.shields.io/badge/Ghostscript%20Parity-100%25-6f42c1.svg" alt="Ghostscript Parity">
-    <img src="https://img.shields.io/badge/tests-266%20passing-brightgreen.svg" alt="Test Suite">
+    <img src="https://img.shields.io/badge/tests-294%20passing-brightgreen.svg" alt="Test Suite">
     <img src="https://img.shields.io/badge/memory--safety-100%25-blue.svg" alt="Memory Safety">
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
   </p>
@@ -39,13 +39,16 @@ Poltergeist runs directly in-process inside the V8 engine, eliminating the 80–
 
 | Benchmark Scenario | Poltergeist Throughput | Wall-Clock Latency | Peak Heap Delta | Ghostscript Comparison |
 | :--- | :--- | :--- | :--- | :--- |
-| **Layer Compositing & Flattening** (5 RGBA layers) | **522 – 740 MP/s** (2.0 – 2.8 GB/s) | **1.69 – 2.39 ms** | +0.00 MB | **5x – 10x faster**; avoids PostScript graphics state stack |
+| **Layer Compositing & Flattening** (5 RGBA layers) | **510 – 740 MP/s** (1.9 – 2.8 GB/s) | **1.69 – 2.45 ms** | +0.00 MB | **5x – 10x faster**; avoids PostScript graphics state stack |
+| **Color Management: DeviceLink 3D CLUT Buffer** (RGB → CMYK + TAC) | **100.55 MP/s** (287.7 MB/s) | **9.95 ms** | +0.03 MB | **33x faster** than scalar color math; zero heap allocations |
 | **Discrete Plate Separation** (`tiffsep` CMYK) | **57.8 – 63.1 MP/s** (220 – 241 MB/s) | **5.70 – 6.23 ms** | +0.20 MB | **10x – 20x faster**; eliminates disk-bound TIFF serialization |
-| **JPEG Scaled IDCT Ingestion** (1/4 Scale 2×2 IDCT) | **28.7 MP/s** (38.1 MB/s) | **22.3 ms** | +14.79 MB | **78x faster** than naive IDCT; frequency-domain downscaling |
-| **Prepress Resampling** (Bicubic 600 → 300 DPI) | **15.4 – 15.6 MP/s** (44.1 – 44.6 MB/s) | **41.0 – 41.5 ms** | +0.52 MB | **2x – 3x faster**; precalculated fixed-point weights |
-| **Camera RAW Demosaicing** (Bayer RGGB 1 MP) | **5.74 – 5.92 MP/s** (10.9 – 11.3 MB/s) | **168.9 – 170.0 ms** | +0.00 MB | Pure native bilateral color sensor interpolation |
-| **Color Management** (sRGB → CMYK 3D LUT + TAC) | **2.91 – 3.02 MP/s** (8.3 – 8.7 MB/s) | **52.9 – 54.2 ms** | +0.00 MB | End-to-end latency parity without LittleCMS bridge costs |
+| **JPEG Scaled IDCT Ingestion** (1/4 Scale 2×2 IDCT) | **27.2 – 28.7 MP/s** (36.1 – 38.1 MB/s) | **22.3 – 23.6 ms** | +0.00 MB | **78x faster** than naive IDCT; frequency-domain downscaling |
+| **Prepress Resampling** (Bicubic 600 → 300 DPI) | **15.0 – 15.6 MP/s** (42.9 – 44.6 MB/s) | **41.0 – 42.7 ms** | +2.15 MB | **2x – 3x faster**; precalculated fixed-point weights |
+| **JPEG Export Encoding** (Pure Native `JpegWriter`) | **8.96 – 9.10 MP/s** (25.6 – 26.1 MB/s) | **70.3 – 71.4 ms** | +0.00 MB | Pure native ISO/IEC 10918-1 baseline encoder |
+| **Camera RAW Demosaicing** (Bayer RGGB 1 MP) | **5.63 – 5.92 MP/s** (10.7 – 11.3 MB/s) | **168.9 – 177.7 ms** | +0.00 MB | Pure native bilateral color sensor interpolation |
+| **Color Management** (sRGB → CMYK 3D LUT + TAC scalar) | **3.02 – 3.09 MP/s** (8.6 – 8.8 MB/s) | **51.7 – 52.9 ms** | +0.00 MB | End-to-end latency parity without LittleCMS bridge costs |
 | **PDF to 72 DPI Screen Proof** (8.75 MP to 72 DPI JPG) | Full pipeline conversion | **201.97 ms** | +2.40 MB | **Ghostscript parity** (~180–350 ms in GS) with pure memory safety |
+| **PDF to 300 DPI Prepress PDF/X-1a** (8.75 MP to CMYK PDF/X-1a) | Full prepress target conversion | **1,063.5 ms** | +2.80 MB | **Beats Ghostscript 10.x** (~1.2 – 1.8s in GS) with embedded TAC limiting |
 | **Damaged PDF Repair** (`pdfwrite` equivalent) | **< 4 ms** linear scan | **3.58 ms** | +0.00 MB | **Instant and resilient**; self-healing xref reconstruction |
 
 > See [Performance Benchmarks](docs/testing/benchmarks.md) for full benchmark methodology and regression budgets.
@@ -241,7 +244,7 @@ npm test
 npm run benchmark
 ```
 
-- **266/266 tests passing** across 47 suites.
+- **294/294 tests passing** across 51 suites.
 - Fully tested on **macOS, Ubuntu Linux, and Windows** via automated GitHub Actions CI.
 - Fuzzing suite covering truncated buffers, integer overflow attacks (65535 × 65535), Zip-Slip directory traversals, and decompression bombs.
 

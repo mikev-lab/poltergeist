@@ -40,12 +40,14 @@ export const ExportFormat = Object.freeze({
 
 /**
  * Converts a RasterImage from RGB/Gray to CMYK with TAC limiting.
+ * Uses zero-allocation DeviceLink 3D CLUT / 1D LUT buffer transforms.
  * @param {RasterImage} image
- * @param {object} options
- * @param {number} tacMax
+ * @param {object} [options]
+ * @param {number} [tacMax=300]
+ * @param {ColorTransform} [sharedTransform]
  * @returns {RasterImage}
  */
-function convertImageToCmyk(image, options, tacMax) {
+function convertImageToCmyk(image, options = {}, tacMax = 300, sharedTransform = null) {
   if (image.colorSpace === ColorSpaceType.CMYK) {
     return image;
   }
@@ -53,32 +55,31 @@ function convertImageToCmyk(image, options, tacMax) {
   const srcProfile = options.sourceIccProfile || image.iccProfile || IccProfile.createSrgbProfile();
   const destProfile = options.targetIccProfile || options.destIccProfile || IccProfile.createCmykReferenceProfile();
 
-  const transform = new ColorTransform({
-    sourceProfile: srcProfile,
-    destinationProfile: destProfile,
-    tacLimiter: new TacLimiter({ maxTac: tacMax })
-  });
+  let transform = sharedTransform;
+  if (!transform || (image.iccProfile && image.iccProfile !== transform.sourceProfile)) {
+    transform = new ColorTransform({
+      sourceProfile: srcProfile,
+      destinationProfile: destProfile,
+      tacLimiter: new TacLimiter({ maxTac: tacMax })
+    });
+  }
 
   const { width, height, data } = image;
   const numPixels = width * height;
   const cmykData = new Uint8Array(numPixels * 4);
 
   if (image.colorSpace === ColorSpaceType.RGB) {
+    transform.transformRgbBufferToCmykBuffer(data, cmykData, numPixels, image.channels || 3);
+  } else if (image.colorSpace === ColorSpaceType.GRAY) {
+    transform.transformGrayBufferToCmykBuffer(data, cmykData, numPixels);
+  } else {
+    // Fallback for exotic/custom color space
     for (let i = 0; i < numPixels; i++) {
       const r = data[i * image.channels] / 255.0;
       const g = data[i * image.channels + 1] / 255.0;
       const b = data[i * image.channels + 2] / 255.0;
 
       const cmyk = transform.transform(new RgbColor(r, g, b));
-      cmykData[i * 4] = Math.round(cmyk.c * 255.0);
-      cmykData[i * 4 + 1] = Math.round(cmyk.m * 255.0);
-      cmykData[i * 4 + 2] = Math.round(cmyk.y * 255.0);
-      cmykData[i * 4 + 3] = Math.round(cmyk.k * 255.0);
-    }
-  } else if (image.colorSpace === ColorSpaceType.GRAY) {
-    for (let i = 0; i < numPixels; i++) {
-      const gray = data[i] / 255.0;
-      const cmyk = transform.transform(new RgbColor(gray, gray, gray));
       cmykData[i * 4] = Math.round(cmyk.c * 255.0);
       cmykData[i * 4 + 1] = Math.round(cmyk.m * 255.0);
       cmykData[i * 4 + 2] = Math.round(cmyk.y * 255.0);
@@ -121,6 +122,17 @@ export function convert(input, options = {}) {
   const targetDpi = options.targetDpi || options.dpi || 300;
   const tacMax = options.tacMax || 300;
   const requiresCmyk = targetFormat === ExportFormat.PDF_X1A || targetFormat === ExportFormat.TIFFSEP;
+
+  let sharedTransform = null;
+  if (requiresCmyk) {
+    const srcProfile = options.sourceIccProfile || IccProfile.createSrgbProfile();
+    const destProfile = options.targetIccProfile || options.destIccProfile || IccProfile.createCmykReferenceProfile();
+    sharedTransform = new ColorTransform({
+      sourceProfile: srcProfile,
+      destinationProfile: destProfile,
+      tacLimiter: new TacLimiter({ maxTac: tacMax })
+    });
+  }
 
   // 1. Ingest: Sniff Document vs Layered vs Raster vs Raw vs Vector vs CAD vs Publication
   let document = null;
@@ -178,7 +190,7 @@ export function convert(input, options = {}) {
     for (const page of docStream.streamPages()) {
       let pageImage = page.image || page.rasterBackground;
       if (pageImage && requiresCmyk && pageImage.colorSpace !== ColorSpaceType.CMYK) {
-        pageImage = convertImageToCmyk(pageImage, options, tacMax);
+        pageImage = convertImageToCmyk(pageImage, options, tacMax, sharedTransform);
       }
 
       processedPages.push(new PageRecord({
@@ -292,7 +304,7 @@ export function convert(input, options = {}) {
 
   let processedImage = image;
   if (requiresCmyk && image.colorSpace !== ColorSpaceType.CMYK) {
-    processedImage = convertImageToCmyk(image, options, tacMax);
+    processedImage = convertImageToCmyk(image, options, tacMax, sharedTransform);
   }
 
   // 4. Export Target

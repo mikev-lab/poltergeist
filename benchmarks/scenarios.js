@@ -80,6 +80,37 @@ export const BENCHMARK_SCENARIOS = [
   },
 
   {
+    name: 'Color Management: DeviceLink 3D CLUT Buffer (RGB -> CMYK + TAC)',
+    setup() {
+      const width = 1000;
+      const height = 1000;
+      const numPixels = width * height;
+      const srcData = new Uint8Array(numPixels * 3);
+      for (let i = 0; i < srcData.length; i++) srcData[i] = (i * 37) & 0xff;
+      const dstData = new Uint8Array(numPixels * 4);
+      const srcProfile = IccProfile.createSrgbProfile();
+      const destProfile = IccProfile.createCmykReferenceProfile();
+      const transform = new ColorTransform({
+        sourceProfile: srcProfile,
+        destinationProfile: destProfile,
+        tacLimiter: new TacLimiter({ maxTac: 300 })
+      });
+      // Warm up CLUT precomputation
+      transform.getDeviceLinkClut();
+      return { transform, srcData, dstData, numPixels };
+    },
+    run({ transform, srcData, dstData, numPixels }) {
+      transform.transformRgbBufferToCmykBuffer(srcData, dstData, numPixels, 3);
+    },
+    megapixels({ numPixels }) {
+      return numPixels / 1_000_000;
+    },
+    megabytes({ numPixels }) {
+      return (numPixels * 3) / (1024 * 1024);
+    }
+  },
+
+  {
     name: 'Layer Compositing & Transparency Flattening (5 Layers RGBA)',
     setup() {
       const width = 500;
