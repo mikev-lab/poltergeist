@@ -34,12 +34,17 @@ export class Token {
 
 export class PdfLexer {
   /**
-   * @param {Uint8Array|Buffer} buffer
+   * @param {Uint8Array|Buffer|import('../../io/seekable.js').SeekableSource} buffer
    */
   constructor(buffer) {
-    this.bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    if (buffer && typeof buffer === 'object' && ('subarray' in buffer && 'length' in buffer)) {
+      this.bytes = buffer;
+      this.len = buffer.length;
+    } else {
+      this.bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+      this.len = this.bytes.length;
+    }
     this.pos = 0;
-    this.len = this.bytes.length;
   }
 
   seek(offset) {

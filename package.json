@@ -4,6 +4,9 @@
   "description": "Memory-safe, zero-dependency prepress conversion and file handling suite",
   "type": "module",
   "main": "src/index.js",
+  "bin": {
+    "poltergeist": "./bin/poltergeist.js"
+  },
   "exports": {
     ".": "./src/index.js",
     "./color": "./src/color/index.js",

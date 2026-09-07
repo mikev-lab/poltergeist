@@ -4,9 +4,15 @@
  * Zero-dependency, stream-lined raster-to-prepress transformation.
  */
 
+import fs from 'node:fs';
 import { decodeRaster } from '../ingestion/raster/index.js';
 import { decodeLayered } from '../ingestion/layered/index.js';
 import { isDocumentFormat, decodeDocument } from '../ingestion/document/index.js';
+import { PdfDecoder } from '../ingestion/pdf/pdf_decoder.js';
+import { SeekableSource } from '../io/seekable.js';
+import { FileSeekableSource } from '../io/file_seekable.js';
+import { HttpSeekableSource } from '../io/http_seekable.js';
+import { WorkerPool } from './worker_pool.js';
 import { RawDecoder, decodeRaw } from '../ingestion/raw/index.js';
 import { SvgDecoder } from '../ingestion/vector/svg_decoder.js';
 import { probeVectorFormat, decodeVector } from '../ingestion/vector/index.js';
@@ -47,7 +53,7 @@ export const ExportFormat = Object.freeze({
  * @param {ColorTransform} [sharedTransform]
  * @returns {RasterImage}
  */
-function convertImageToCmyk(image, options = {}, tacMax = 300, sharedTransform = null) {
+export function convertImageToCmyk(image, options = {}, tacMax = 300, sharedTransform = null) {
   if (image.colorSpace === ColorSpaceType.CMYK) {
     return image;
   }
@@ -222,6 +228,10 @@ function generateProofImage(source, proofDpi, proofFormat = 'jpeg', quality = 85
  * @returns {Uint8Array|Map<string, Uint8Array>}
  */
 export function convert(input, options = {}) {
+  if (options.parallel === true) {
+    return convertParallel(input, options);
+  }
+
   const targetFormat = (options.targetFormat || options.format || ExportFormat.PDF_X1A).toLowerCase();
   const shouldDownsample = options.downsample !== false &&
     !options.bypassDownsampling &&
@@ -259,12 +269,26 @@ export function convert(input, options = {}) {
   } else if (input instanceof LayeredImage) {
     image = TransparencyFlattener.flattenToRaster(input);
   } else if (typeof input === 'string') {
-    if (SvgDecoder.probe(input)) {
+    if (fs.existsSync(input)) {
+      if (PdfDecoder.probe(input)) {
+        document = PdfDecoder.decode(input, options);
+      } else {
+        const fileBytes = fs.readFileSync(input);
+        return convert(fileBytes, options);
+      }
+    } else if (SvgDecoder.probe(input)) {
       document = SvgDecoder.decode(input, options);
     } else if (DxfDecoder.probe(input)) {
       document = DxfDecoder.decode(input, options);
     } else {
-      throw new Error('Unsupported text input format');
+      throw new Error('Unsupported text input format or non-existent file path');
+    }
+  } else if (input instanceof SeekableSource) {
+    if (PdfDecoder.probe(input)) {
+      document = PdfDecoder.decode(input, options);
+    } else {
+      const bytes = input.readSync(0, input.size);
+      return convert(bytes, options);
     }
   } else {
     const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
@@ -600,6 +624,264 @@ export function convert(input, options = {}) {
 
     default:
       throw new Error(`Unsupported export format: ${targetFormat}`);
+  }
+}
+
+/**
+ * Asynchronous multi-core prepress conversion orchestrator.
+ * Scales throughput across CPU cores using Node.js worker threads.
+ *
+ * @param {Uint8Array|Buffer|Document|RasterImage|string|SeekableSource} input
+ * @param {object} [options]
+ * @param {number} [options.maxWorkers] Maximum worker threads
+ * @returns {Promise<Uint8Array|Map<string, Uint8Array>>}
+ */
+export async function convertParallel(input, options = {}) {
+  // 1. Handle HTTP / HTTPS URL
+  if (typeof input === 'string' && (input.startsWith('http://') || input.startsWith('https://'))) {
+    const httpSource = await HttpSeekableSource.create(input);
+    try {
+      return await convertParallel(httpSource, options);
+    } finally {
+      await httpSource.close();
+    }
+  }
+
+  // 2. Ingest document or image
+  let document = null;
+  let image = null;
+
+  if (input instanceof Document) {
+    document = input;
+  } else if (input instanceof RasterImage) {
+    image = input;
+  } else if (input instanceof LayeredImage) {
+    image = TransparencyFlattener.flattenToRaster(input);
+  } else if (typeof input === 'string') {
+    if (fs.existsSync(input)) {
+      if (PdfDecoder.probe(input)) {
+        document = PdfDecoder.decode(input, options);
+      } else {
+        const fileBytes = fs.readFileSync(input);
+        return convertParallel(fileBytes, options);
+      }
+    } else if (SvgDecoder.probe(input)) {
+      document = SvgDecoder.decode(input, options);
+    } else if (DxfDecoder.probe(input)) {
+      document = DxfDecoder.decode(input, options);
+    } else {
+      throw new Error('Unsupported text input format or non-existent file path');
+    }
+  } else if (input instanceof SeekableSource) {
+    if (PdfDecoder.probe(input)) {
+      document = PdfDecoder.decode(input, options);
+    } else {
+      const bytes = input.readSync(0, input.size);
+      return convertParallel(bytes, options);
+    }
+  } else {
+    const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+    if (RawDecoder.probe(bytes)) {
+      image = decodeRaw(bytes, options);
+    } else if (probeVectorFormat(bytes)) {
+      document = decodeVector(bytes, options);
+    } else if (probeCadFormat(bytes)) {
+      document = decodeCad(bytes, options);
+    } else if (probePublicationFormat(bytes)) {
+      document = decodePublication(bytes, options);
+    } else if (isDocumentFormat(bytes)) {
+      document = decodeDocument(bytes, options);
+    } else {
+      const isPsd = bytes.length >= 4 && bytes[0] === 0x38 && bytes[1] === 0x42 && bytes[2] === 0x50 && bytes[3] === 0x53;
+      const isClip = bytes.length >= 16 && bytes[0] === 0x53 && bytes[1] === 0x51 && bytes[2] === 0x4c && bytes[3] === 0x69;
+      const isXcf = bytes.length >= 9 && bytes[0] === 0x67 && bytes[1] === 0x69 && bytes[2] === 0x6d && bytes[3] === 0x70;
+
+      if (isPsd || isClip || isXcf) {
+        const layered = decodeLayered(bytes);
+        image = TransparencyFlattener.flattenToRaster(layered);
+      } else {
+        image = decodeRaster(bytes, options);
+      }
+    }
+  }
+
+  // If single image or document with <= 1 page, worker pool overhead is unnecessary
+  if (image) {
+    return convert(image, { ...options, parallel: false });
+  }
+
+  if (!document) {
+    throw new Error('Failed to ingest document or image from input');
+  }
+
+  // Filter page range if requested
+  if (options.page !== undefined) {
+    const pNum = options.page;
+    if (!Number.isInteger(pNum) || pNum < 1 || pNum > document.pages.length) {
+      throw new RangeError(`Requested page ${pNum} is out of document bounds (1..${document.pages.length})`);
+    }
+    document.pages = [document.pages[pNum - 1]];
+  } else if (Array.isArray(options.pages) && options.pages.length > 0) {
+    const selected = [];
+    for (const p of options.pages) {
+      if (!Number.isInteger(p) || p < 1 || p > document.pages.length) {
+        throw new RangeError(`Requested page ${p} is out of document bounds (1..${document.pages.length})`);
+      }
+      selected.push(document.pages[p - 1]);
+    }
+    document.pages = selected;
+  }
+
+  if (document.pages.length <= 1) {
+    return convert(document, { ...options, parallel: false });
+  }
+
+  const targetFormat = (options.targetFormat || options.format || ExportFormat.PDF_X1A).toLowerCase();
+  const splitPages = options.splitPages === true;
+  const renderProofs = options.renderProofs === true;
+  const isMultiJpeg = (targetFormat === ExportFormat.JPEG || targetFormat === ExportFormat.JPG) && options.firstPageOnly !== true;
+
+  const pool = new WorkerPool({ maxWorkers: options.maxWorkers });
+
+  try {
+    // Mode A: Splitting, proofs, or multi-page JPEG -> Each worker produces finished files
+    if (splitPages || renderProofs || isMultiJpeg) {
+      const taskPromises = document.pages.map((page, index) => {
+        const pageNum = page.pageNumber || (index + 1);
+        const baseName = options.pageNaming ? options.pageNaming(pageNum, page) : `page_${pageNum}`;
+        const pageImage = page.image || page.rasterBackground;
+
+        const workerOptions = { ...options };
+        delete workerOptions.pageNaming;
+        delete workerOptions.page;
+        delete workerOptions.pages;
+
+        return pool.execute({
+          mode: 'convert_page',
+          baseName,
+          pageData: {
+            pageNumber: pageNum,
+            width: page.width,
+            height: page.height,
+            dpi: page.dpi,
+            boxes: page.boxes,
+            image: pageImage ? {
+              width: pageImage.width,
+              height: pageImage.height,
+              channels: pageImage.channels,
+              bitsPerSample: pageImage.bitsPerSample,
+              colorSpace: pageImage.colorSpace,
+              pixelFormat: pageImage.pixelFormat,
+              dpiX: pageImage.dpiX,
+              dpiY: pageImage.dpiY,
+              data: pageImage.data
+            } : null,
+            layers: page.layers,
+            paths: page.paths,
+            text: page.text,
+            resources: page.resources,
+            metadata: page.metadata
+          },
+          options: {
+            ...workerOptions,
+            parallel: false,
+            splitPages: true,
+            jobName: baseName
+          }
+        });
+      });
+
+      const results = await Promise.all(taskPromises);
+
+      const resultMap = new Map();
+      const jobName = options.jobName || 'document';
+
+      // If combined master PDF was also requested alongside individual proofs:
+      if (!splitPages && (targetFormat === ExportFormat.PDF_X1A || targetFormat === ExportFormat.PDF_X4)) {
+        const singleDoc = convert(document, { ...options, splitPages: false, renderProofs: false, parallel: false });
+        resultMap.set(`${jobName}.pdf`, singleDoc);
+      }
+
+      for (const res of results) {
+        if (Array.isArray(res)) {
+          for (const item of res) {
+            resultMap.set(item.filename, item.buf);
+          }
+        } else if (res && typeof res === 'object' && res.filename && res.buf) {
+          resultMap.set(res.filename, res.buf);
+        }
+      }
+
+      return resultMap;
+    }
+
+    // Mode B: Combined multi-page export (e.g. 50-page PDF/X-1a)
+    // Run downsampling + CMYK conversion in parallel across workers!
+    const workerOptions = { ...options };
+    delete workerOptions.pageNaming;
+    delete workerOptions.page;
+    delete workerOptions.pages;
+
+    const taskPromises = document.pages.map((page, index) => {
+      const pageNum = page.pageNumber || (index + 1);
+      const pageImage = page.image || page.rasterBackground;
+
+      return pool.execute({
+        mode: 'process_page',
+        pageData: {
+          pageNumber: pageNum,
+          width: page.width,
+          height: page.height,
+          dpi: page.dpi,
+          boxes: page.boxes,
+          image: pageImage ? {
+            width: pageImage.width,
+            height: pageImage.height,
+            channels: pageImage.channels,
+            bitsPerSample: pageImage.bitsPerSample,
+            colorSpace: pageImage.colorSpace,
+            pixelFormat: pageImage.pixelFormat,
+            dpiX: pageImage.dpiX,
+            dpiY: pageImage.dpiY,
+            data: pageImage.data
+          } : null,
+          layers: page.layers,
+          paths: page.paths,
+          text: page.text,
+          resources: page.resources,
+          metadata: page.metadata
+        },
+        options: {
+          ...workerOptions,
+          parallel: false
+        }
+      });
+    });
+
+    const processedPageResults = await Promise.all(taskPromises);
+    const processedPages = processedPageResults.map(p => {
+      const pageObj = p.page || p;
+      let img = pageObj.image;
+      if (img && !(img instanceof RasterImage) && typeof img === 'object') {
+        img = new RasterImage(img);
+      }
+      return new PageRecord({
+        ...pageObj,
+        image: img
+      });
+    });
+
+    const processedDoc = new Document({
+      title: document.title,
+      creator: document.creator,
+      pages: processedPages,
+      colorSpace: (targetFormat === ExportFormat.PDF_X1A || targetFormat === ExportFormat.TIFFSEP) ? ColorSpaceType.CMYK : document.colorSpace,
+      iccProfile: document.iccProfile
+    });
+
+    return convert(processedDoc, { ...options, parallel: false, downsample: false });
+  } finally {
+    await pool.terminate();
   }
 }
 

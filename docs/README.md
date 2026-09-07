@@ -8,6 +8,9 @@ Welcome to the **Poltergeist** technical documentation. Poltergeist is a memory-
 
 ### 1. Architecture & Core Pipelines
 - **[System Architecture & Overview](architecture/system-overview.md)**: High-level architectural layers, unidirectional flow, pipeline topology, and memory safety principles.
+- **[CLI Specification & Ghostscript Emulation](architecture/cli-specification.md)**: Command-line manual, modern ergonomic switches, and 100% Ghostscript flag emulation.
+- **[Large File Random-Access Streaming (5 GB+)](architecture/large-file-streaming.md)**: $O(\text{page})$ bounded streaming, 1 MB sliding-window cache, and overcoming V8's 4 GiB buffer limit.
+- **[Cloud S3 & HTTP Range Stream Ingestion](pipelines/cloud-s3-streaming.md)**: RFC 7233 HTTP byte-range streaming, suffix prefetch, and zero-download remote cloud processing.
 - **[Exhaustive Architecture](architecture/exhaustive-architecture.md)**: Detailed system specifications, chunked memory streaming models, and subsystem interfaces.
 - **[Engineering Roadmap](architecture/roadmap.md)**: Six-phase engineering milestones, deliverables, and completion status.
 - **[Color Separation & Prepress Pipeline](pipelines/color-pipeline.md)**: ICC v2/v4 parsing, 3D LUT tetrahedral interpolation, Total Area Coverage (TAC) ink limiting via UCR/GCR, DeviceN spot colors, and overprint simulation (`-dSimulateOverprint`).

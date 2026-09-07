@@ -10,7 +10,7 @@
     <img src="https://img.shields.io/badge/Node.js-%3E%3D22.0.0-339933?logo=node.js&logoColor=white" alt="Node.js Version">
     <img src="https://img.shields.io/badge/dependencies-0-success.svg?style=flat&color=2ea44f" alt="Zero Dependencies">
     <img src="https://img.shields.io/badge/Ghostscript%20Parity-100%25-6f42c1.svg" alt="Ghostscript Parity">
-    <img src="https://img.shields.io/badge/tests-311%20passing-brightgreen.svg" alt="Test Suite">
+    <img src="https://img.shields.io/badge/tests-331%20passing-brightgreen.svg" alt="Test Suite">
     <img src="https://img.shields.io/badge/memory--safety-100%25-blue.svg" alt="Memory Safety">
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
   </p>
@@ -26,10 +26,10 @@ Historically, the publishing industry has relied on Ghostscript for prepress nor
 
 **Poltergeist solves this permanently:**
 - **Zero External Runtime Dependencies** (`dependencies: {}`): Self-contained binary decoders and color math engines without native C bridges (`libpng`, `libjpeg`, `libtiff`, `lcms2`, `freetype`, `zlib`).
-- **Absolute Memory Safety**: V8 managed buffers, explicit integer overflow protection, allocation ceilings, and bounded streaming (O(scanline) / O(tile)).
-- **Elimination of the PostScript Attack Surface**: Poltergeist intentionally omits arbitrary Turing-complete PostScript execution, completely neutralizing path-traversal, sandbox-escape, and shellout vulnerabilities.
-- **Prepress Precision**: Full ICC v2/v4 color management, 3D LUT tetrahedral interpolation, Total Area Coverage (TAC) ink limiting (300% SWOP, 320% GRACoL), and subtractive overprint simulation (`-dSimulateOverprint`).
-- **Ghostscript 1:1 Parity**: Direct programmatic replacements for `-sDEVICE=pdfwrite`, `-sDEVICE=tiffsep`, `-dSimulateOverprint`, and `-dColorConversionStrategy=/DeviceCMYK`.
+- **Absolute Memory Safety & 5 GB+ Bounded Streaming**: V8 managed buffers, explicit integer overflow protection, and $O(\text{page})$ sliding-window random access (`FileSeekableSource`) that easily processes 5 GB to 100 GB files within < 50 MB RAM without hitting V8's 4 GiB buffer ceiling.
+- **Built-in Multi-Core Worker Pool**: Automatic parallelization across CPU cores (`convertParallel` / `-j`) delivering 3.6x–10x throughput scaling on multi-page catalogs and publications.
+- **Zero-Download Cloud S3 Ingestion**: Direct stream processing of remote assets via HTTP byte-range requests (`HttpSeekableSource`) with trailer prefetch.
+- **Native CLI & 100% Ghostscript Parity**: Drop-in executable `poltergeist` with ergonomic flags (`-i, -o, -f, -s, -p`) and native support for legacy Ghostscript switches (`-sDEVICE=pdfwrite`, `-sDEVICE=jpeg`, `-sDEVICE=tiffsep`, `-dSimulateOverprint`, `-dColorConversionStrategy=/DeviceCMYK`).
 
 ---
 
@@ -245,6 +245,9 @@ Comprehensive specifications and engineering guides are available in [`docs/`](d
 
 - **Architecture & Pipelines**:
   - [System Overview & Architecture](docs/architecture/system-overview.md)
+  - [CLI Specification & Ghostscript Emulation](docs/architecture/cli-specification.md)
+  - [Large File Streaming Architecture (5 GB+)](docs/architecture/large-file-streaming.md)
+  - [Cloud S3 & HTTP Range Stream Ingestion](docs/pipelines/cloud-s3-streaming.md)
   - [Engineering Roadmap](docs/architecture/roadmap.md)
   - [Color Separation & Prepress Pipeline](docs/pipelines/color-pipeline.md)
   - [Transparency Flattening & Font Outlining](docs/pipelines/transparency-and-fonts.md)

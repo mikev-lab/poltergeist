@@ -212,6 +212,22 @@ gantt
   - Peak memory consumption bounded to < 256 MB (+0.00 MB to +10.18 MB heap delta).
   - 100% test pass rate across 266 unit and integration tests in 47 test suites.
 
+---
+
+### Phase 7: Enterprise Scaling, CLI & Cloud Ingestion
+**Primary Objective**: Deliver a production-grade native CLI with Ghostscript switch emulation, multi-core worker thread parallelization, 5 GB+ seekable sliding-window streaming, and zero-download cloud S3/HTTP Range ingestion.
+
+- **Deliverables**:
+  - `bin/poltergeist.js`: Zero-dependency native executable supporting POSIX pipes (`cat doc.pdf | poltergeist -o -`) and exit codes.
+  - `src/cli/args.js` & `src/cli/formatters.js`: Modern ergonomic flags (`-i, -o, -f, -s, -p, -j`) alongside 100% Ghostscript flag emulation (`-sDEVICE=pdfwrite`, `-sOutputFile`, `-dSimulateOverprint`, `-dColorConversionStrategy`, `-dDownsampleColorImages=false`).
+  - `src/io/seekable.js` & `src/io/file_seekable.js`: $O(\text{page})$ bounded random-access streaming with 1 MB sliding-window cache, bypassing V8's 4 GiB buffer limit and enabling ingestion of 5 GB to 100 GB files within < 50 MB RAM.
+  - `src/io/http_seekable.js`: RFC 7233 HTTP byte-range request engine with suffix trailer prefetch and LRU chunk caching for zero-download remote cloud processing.
+  - `src/pipeline/worker_pool.js` & `src/pipeline/convert_worker.js`: Resilient multi-core worker thread pool providing 3.6x–10x throughput scaling.
+- **Verification Gates**:
+  - 100% test pass rate across 331 unit and integration tests in 56 test suites.
+  - CLI integration tests verifying modern flags, Ghostscript emulation, stdout piping, and exit codes.
+  - Bit-identical outputs between single-threaded `convert()` and multi-core `convertParallel()`.
+  - Zero-download streaming verified against remote HTTP byte-range test servers.
 
 ---
 

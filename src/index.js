@@ -69,4 +69,8 @@ export * from './compositor/assembly/document_stream.js';
 // High-speed Conversion Pipeline
 export * from './pipeline/convert.js';
 
+// Random-Access I/O & Cloud Streaming
+export * from './io/index.js';
 
+// Multi-Core Worker Pool
+export * from './pipeline/worker_pool.js';
