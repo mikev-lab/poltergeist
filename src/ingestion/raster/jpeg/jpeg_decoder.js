@@ -8,16 +8,16 @@
 import { RasterImage, PixelFormat, ColorSpaceType, calculateBufferSize } from '../../../types/image.js';
 import { IccProfile } from '../../../color/icc/profile.js';
 
-// Standard 8x8 Zig-Zag scan order
+// Standard 8x8 Zig-Zag scan order (ITU-T T.81 Figure A.6)
 const ZIGZAG = new Uint8Array([
-   0,  1,  5,  6, 14, 15, 27, 28,
-   2,  4,  7, 13, 16, 26, 29, 42,
-   3,  8, 12, 17, 25, 30, 41, 43,
-   9, 11, 18, 24, 31, 40, 44, 53,
-  10, 19, 23, 32, 39, 45, 52, 54,
-  20, 22, 33, 38, 46, 51, 55, 60,
-  21, 34, 37, 47, 50, 56, 59, 61,
-  35, 36, 48, 49, 57, 58, 62, 63
+   0,  1,  8, 16,  9,  2,  3, 10,
+  17, 24, 32, 25, 18, 11,  4,  5,
+  12, 19, 26, 33, 40, 48, 41, 34,
+  27, 20, 13,  6,  7, 14, 21, 28,
+  35, 42, 49, 56, 57, 50, 43, 36,
+  29, 22, 15, 23, 30, 37, 44, 51,
+  58, 59, 52, 45, 38, 31, 39, 46,
+  53, 60, 61, 54, 47, 55, 62, 63
 ]);
 
 /**
@@ -109,18 +109,39 @@ class JpegBitReader {
     this.bitsLeft = 0;
   }
 
+  _loadByte() {
+    if (this.offset >= this.buffer.length) {
+      return -1;
+    }
+    let b = this.buffer[this.offset++];
+    if (b === 0xff) {
+      while (this.offset < this.buffer.length && this.buffer[this.offset] === 0xff) {
+        this.offset++;
+      }
+      if (this.offset < this.buffer.length) {
+        const next = this.buffer[this.offset];
+        if (next === 0x00) {
+          this.offset++; // Skip stuffed zero
+          return 0xff;
+        }
+        if ((next >= 0xd0 && next <= 0xd7) || next === 0xd9) {
+          // Restart marker or EOI encountered; stop loading into bitBuf
+          this.offset--;
+          return -1;
+        }
+      }
+    }
+    return b;
+  }
+
   readBit() {
     if (this.bitsLeft === 0) {
-      if (this.offset < this.buffer.length) {
-        let b = this.buffer[this.offset++];
-        if (b === 0xff && this.offset < this.buffer.length && this.buffer[this.offset] === 0x00) {
-          this.offset++;
-        }
-        this.bitBuf = b;
-        this.bitsLeft = 8;
-      } else {
+      const b = this._loadByte();
+      if (b === -1) {
         return 0;
       }
+      this.bitBuf = b;
+      this.bitsLeft = 8;
     }
     this.bitsLeft--;
     return (this.bitBuf >>> this.bitsLeft) & 1;
@@ -128,11 +149,9 @@ class JpegBitReader {
 
   readBits(count) {
     if (count === 0) return 0;
-    while (this.bitsLeft < count && this.offset < this.buffer.length) {
-      let b = this.buffer[this.offset++];
-      if (b === 0xff && this.offset < this.buffer.length && this.buffer[this.offset] === 0x00) {
-        this.offset++;
-      }
+    while (this.bitsLeft < count) {
+      const b = this._loadByte();
+      if (b === -1) break;
       this.bitBuf = ((this.bitBuf << 8) | b) >>> 0;
       this.bitsLeft += 8;
     }
@@ -148,12 +167,10 @@ class JpegBitReader {
   decodeHuffman(table) {
     if (!table) return 0;
     // Lookahead 8 bits
-    while (this.bitsLeft < 8 && this.offset < this.buffer.length) {
-      let b = this.buffer[this.offset++];
-      if (b === 0xff && this.offset < this.buffer.length && this.buffer[this.offset] === 0x00) {
-        this.offset++;
-      }
-      this.bitBuf = (this.bitBuf << 8) | b;
+    while (this.bitsLeft < 8) {
+      const b = this._loadByte();
+      if (b === -1) break;
+      this.bitBuf = ((this.bitBuf << 8) | b) >>> 0;
       this.bitsLeft += 8;
     }
 
@@ -178,6 +195,20 @@ class JpegBitReader {
       }
     }
     return 0; // Huffman decode error recovery
+  }
+
+  skipRestartMarker() {
+    this.bitsLeft = 0;
+    this.bitBuf = 0;
+    while (this.offset < this.buffer.length && this.buffer[this.offset] !== 0xff) {
+      this.offset++;
+    }
+    while (this.offset < this.buffer.length && this.buffer[this.offset] === 0xff) {
+      this.offset++;
+    }
+    if (this.offset < this.buffer.length && this.buffer[this.offset] >= 0xd0 && this.buffer[this.offset] <= 0xd7) {
+      this.offset++;
+    }
   }
 
   receiveExtend(length) {
@@ -212,6 +243,7 @@ export class JpegDecoder {
     let dpiX = 300;
     let dpiY = 300;
     let adobeTransform = null; // 0=CMYK, 1=YCbCr, 2=YCCK
+    let restartInterval = 0;
 
     const qTables = [];
     const dcTables = [];
@@ -289,6 +321,8 @@ export class JpegDecoder {
           }
           qTables[tableIdx] = table;
         }
+      } else if (marker === 0xdd) { // DRI Define Restart Interval
+        restartInterval = view.getUint16(payloadStart, false);
       } else if (marker === 0xc0) { // SOF0 Baseline DCT
         height = view.getUint16(payloadStart + 1, false);
         width = view.getUint16(payloadStart + 3, false);
@@ -357,7 +391,8 @@ export class JpegDecoder {
           dpiX,
           dpiY,
           adobeTransform,
-          iccChunks
+          iccChunks,
+          restartInterval
         });
       }
     }
@@ -380,7 +415,8 @@ export class JpegDecoder {
     dpiX,
     dpiY,
     adobeTransform,
-    iccChunks
+    iccChunks,
+    restartInterval = 0
   }) {
     // Reconstruct ICC profile if chunks exist
     let iccProfile = null;
@@ -422,9 +458,17 @@ export class JpegDecoder {
     const blockCoeffs = new Float64Array(64);
     const blockPixels = new Uint8Array(64);
 
+    let mcuCount = 0;
+
     // Decode all MCUs
     for (let my = 0; my < mcusY; my++) {
       for (let mx = 0; mx < mcusX; mx++) {
+        if (restartInterval > 0 && mcuCount > 0 && (mcuCount % restartInterval) === 0) {
+          bitReader.skipRestartMarker();
+          prevDc.fill(0);
+        }
+        mcuCount++;
+
         for (let c = 0; c < numComponents; c++) {
           const comp = components[c];
           const qTable = qTables[comp.qTableIdx] || qTables[0];
