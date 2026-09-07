@@ -1,0 +1,31 @@
+{
+  "name": "poltergeist",
+  "version": "0.1.0",
+  "description": "Memory-safe, zero-dependency prepress conversion and file handling suite",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./color": "./src/color/index.js",
+    "./types": "./src/types/color.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "test": "node --test tests/**/*.test.js"
+  },
+  "keywords": [
+    "prepress",
+    "ghostscript-replacement",
+    "color-separation",
+    "icc",
+    "cmyk",
+    "tac-limiting",
+    "ciede2000",
+    "zero-dependencies"
+  ],
+  "author": "",
+  "license": "Apache-2.0",
+  "dependencies": {}
+}
