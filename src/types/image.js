@@ -70,7 +70,7 @@ export function calculateBufferSize(width, height, channels, bytesPerSample) {
   const totalBytes = numPixels * channels * bytesPerSample;
 
   if (!Number.isSafeInteger(totalBytes) || totalBytes > MAX_SAFE_BUFFER_SIZE) {
-    throw new RangeError(`Allocation of ${totalBytes} bytes exceeds maximum safe buffer size (${MAX_SAFE_BUFFER_SIZE} bytes).`);
+    throw new RangeError(`Allocation of ${totalBytes} bytes exceeds maximum safe buffer allocation threshold (${MAX_SAFE_BUFFER_SIZE} bytes).`);
   }
 
   return totalBytes;

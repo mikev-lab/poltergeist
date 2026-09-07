@@ -5,7 +5,7 @@
  * multi-part APP2 ICC profile assembly, and Adobe YCCK/CMYK conversion.
  */
 
-import { RasterImage, PixelFormat, ColorSpaceType } from '../../../types/image.js';
+import { RasterImage, PixelFormat, ColorSpaceType, calculateBufferSize } from '../../../types/image.js';
 import { IccProfile } from '../../../color/icc/profile.js';
 
 // Standard 8x8 Zig-Zag scan order
@@ -292,6 +292,7 @@ export class JpegDecoder {
         height = view.getUint16(payloadStart + 1, false);
         width = view.getUint16(payloadStart + 3, false);
         numComponents = bytes[payloadStart + 5];
+        calculateBufferSize(width, height, numComponents, 1);
         let pos = payloadStart + 6;
         for (let i = 0; i < numComponents; i++) {
           const id = bytes[pos++];

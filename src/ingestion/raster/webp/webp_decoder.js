@@ -5,7 +5,7 @@
  * and lossless/lossy raster frame parsing.
  */
 
-import { RasterImage, PixelFormat, ColorSpaceType } from '../../../types/image.js';
+import { RasterImage, PixelFormat, ColorSpaceType, calculateBufferSize } from '../../../types/image.js';
 import { IccProfile } from '../../../color/icc/profile.js';
 
 export class WebpDecoder {
@@ -101,6 +101,7 @@ export class WebpDecoder {
 
     const channels = hasAlpha ? 4 : 3;
     const pixelFormat = hasAlpha ? PixelFormat.RGBA32 : PixelFormat.RGB24;
+    calculateBufferSize(width, height, channels, 1);
     const outData = new Uint8Array(width * height * channels);
 
     return new RasterImage({

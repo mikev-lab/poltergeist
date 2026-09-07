@@ -5,7 +5,7 @@
  */
 
 import zlib from 'node:zlib';
-import { RasterImage, PixelFormat, ColorSpaceType } from '../../../types/image.js';
+import { RasterImage, PixelFormat, ColorSpaceType, calculateBufferSize } from '../../../types/image.js';
 import { IccProfile } from '../../../color/icc/profile.js';
 
 // Precomputed CRC-32 table
@@ -314,6 +314,7 @@ export class PngDecoder {
     const outChannels = colorType === 3 ? 3 : channels;
     const outBitsPerSample = bitDepth <= 8 ? 8 : 16;
     const outBytesPerSample = outBitsPerSample === 16 ? 2 : 1;
+    calculateBufferSize(width, height, outChannels, outBytesPerSample);
     const outData = new Uint8Array(width * height * outChannels * outBytesPerSample);
 
     // Compute raw bytes per scanline before unfiltering
@@ -456,6 +457,7 @@ export class PngDecoder {
   static _decodeAdam7(params) {
     const { width, height, colorType, channels, colorSpace, pixelFormat, hasAlpha, palette, dpiX, dpiY, iccProfile } = params;
     const outChannels = colorType === 3 ? 3 : channels;
+    calculateBufferSize(width, height, outChannels, 1);
     const outData = new Uint8Array(width * height * outChannels);
 
     // Fallback: fill decoded image container

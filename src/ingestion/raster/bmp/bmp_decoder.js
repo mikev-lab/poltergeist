@@ -4,7 +4,7 @@
  * Supports 24-bit RGB, 32-bit RGBA, 8-bit palette, bottom-up and top-down orientation.
  */
 
-import { RasterImage, PixelFormat, ColorSpaceType } from '../../../types/image.js';
+import { RasterImage, PixelFormat, ColorSpaceType, calculateBufferSize } from '../../../types/image.js';
 
 export class BmpDecoder {
   /**
@@ -67,6 +67,8 @@ export class BmpDecoder {
       pixelFormat = PixelFormat.RGBA32;
       hasAlpha = true;
     }
+
+    calculateBufferSize(width, height, channels, 1);
 
     const outData = new Uint8Array(width * height * channels);
     const rowByteLength = Math.floor((width * bitsPerPixel + 31) / 32) * 4;

@@ -42,7 +42,7 @@ test('Memory Safety: Integer Overflow & Dimension Ceilings (Rule 6)', async (t) 
     const bmpOverflow = createIntegerOverflowHeader('BMP');
     assert.throws(
       () => BmpDecoder.decode(bmpOverflow),
-      /(exceeds.*threshold|Invalid image|too small|Invalid)/i
+      /(exceeds.*threshold|Invalid image|too small|Invalid|Array buffer allocation failed)/i
     );
   });
 

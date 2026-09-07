@@ -4,7 +4,7 @@
  * Supports uncompressed and RLE compressed truecolor and grayscale.
  */
 
-import { RasterImage, PixelFormat, ColorSpaceType } from '../../../types/image.js';
+import { RasterImage, PixelFormat, ColorSpaceType, calculateBufferSize } from '../../../types/image.js';
 
 export class TgaDecoder {
   /**
@@ -63,6 +63,8 @@ export class TgaDecoder {
       pixelFormat = PixelFormat.RGBA32;
       hasAlpha = true;
     }
+
+    calculateBufferSize(width, height, channels, 1);
 
     const bytesPerPixel = Math.max(1, Math.floor(pixelDepth / 8));
     const totalPixels = width * height;
