@@ -8,6 +8,7 @@ import { PageRecord, PageBox } from '../../types/document.js';
 import { PdfFilterDecoder } from './filters.js';
 import { PdfLexer } from './lexer.js';
 import { PdfParser, PdfRef } from './parser.js';
+import { JpegDecoder } from '../raster/jpeg/jpeg_decoder.js';
 
 export class PageTreeTraverser {
   /**
@@ -130,11 +131,39 @@ export class PageTreeTraverser {
         }
       }
 
+      // Extract raster image from page resources if present
+      let pageImage = null;
+      const resRef = node.get('Resources') || currentInherited.resources;
+      if (resRef) {
+        const resources = this.resolve(resRef);
+        if (resources instanceof Map && resources.has('XObject')) {
+          const xobjMap = this.resolve(resources.get('XObject'));
+          if (xobjMap instanceof Map) {
+            for (const [, xRef] of xobjMap.entries()) {
+              const xObj = this.resolve(xRef);
+              if (xObj instanceof Map && xObj.get('Subtype') === 'Image' && xObj.has('__stream')) {
+                const stream = xObj.get('__stream');
+                const filter = xObj.get('Filter');
+                if (filter === 'DCTDecode' || (Array.isArray(filter) && filter.includes('DCTDecode'))) {
+                  try {
+                    pageImage = JpegDecoder.decode(stream);
+                    break;
+                  } catch {
+                    // Non-fatal
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
       collectedPages.push(new PageRecord({
         pageNumber: pageNum,
         width: boxes.width,
         height: boxes.height,
         boxes,
+        image: pageImage,
         text: pageText
       }));
       return;

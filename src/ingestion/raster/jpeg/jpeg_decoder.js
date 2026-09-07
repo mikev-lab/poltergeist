@@ -111,37 +111,38 @@ class JpegBitReader {
 
   readBit() {
     if (this.bitsLeft === 0) {
-      this.loadByte();
+      if (this.offset < this.buffer.length) {
+        let b = this.buffer[this.offset++];
+        if (b === 0xff && this.offset < this.buffer.length && this.buffer[this.offset] === 0x00) {
+          this.offset++;
+        }
+        this.bitBuf = b;
+        this.bitsLeft = 8;
+      } else {
+        return 0;
+      }
     }
     this.bitsLeft--;
-    return (this.bitBuf >> this.bitsLeft) & 1;
+    return (this.bitBuf >>> this.bitsLeft) & 1;
   }
 
   readBits(count) {
-    let result = 0;
-    for (let i = 0; i < count; i++) {
-      result = (result << 1) | this.readBit();
-    }
-    return result;
-  }
-
-  loadByte() {
-    if (this.offset >= this.buffer.length) {
-      this.bitBuf = 0;
-      this.bitsLeft = 8;
-      return;
-    }
-    let b = this.buffer[this.offset++];
-    if (b === 0xff) {
-      if (this.offset < this.buffer.length) {
-        const next = this.buffer[this.offset];
-        if (next === 0x00) {
-          this.offset++; // Skip stuffed zero
-        }
+    if (count === 0) return 0;
+    while (this.bitsLeft < count && this.offset < this.buffer.length) {
+      let b = this.buffer[this.offset++];
+      if (b === 0xff && this.offset < this.buffer.length && this.buffer[this.offset] === 0x00) {
+        this.offset++;
       }
+      this.bitBuf = ((this.bitBuf << 8) | b) >>> 0;
+      this.bitsLeft += 8;
     }
-    this.bitBuf = b;
-    this.bitsLeft = 8;
+    if (this.bitsLeft < count) {
+      const v = (this.bitBuf << (count - this.bitsLeft)) & ((1 << count) - 1);
+      this.bitsLeft = 0;
+      return v;
+    }
+    this.bitsLeft -= count;
+    return (this.bitBuf >>> this.bitsLeft) & ((1 << count) - 1);
   }
 
   decodeHuffman(table) {

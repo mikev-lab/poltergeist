@@ -27,12 +27,15 @@ import { PdfX1aGenerator } from '../export/pdf/pdfx1a.js';
 import { PdfX4Generator } from '../export/pdf/pdfx4.js';
 import { TiffWriter } from '../export/tiff/tiff_writer.js';
 import { SeparationPlateGenerator } from '../export/tiffsep/plate_generator.js';
+import { JpegWriter } from '../export/jpeg/jpeg_writer.js';
 
 export const ExportFormat = Object.freeze({
   PDF_X1A: 'pdf/x-1a',
   PDF_X4: 'pdf/x-4',
   TIFF: 'tiff',
-  TIFFSEP: 'tiffsep'
+  TIFFSEP: 'tiffsep',
+  JPEG: 'jpeg',
+  JPG: 'jpg'
 });
 
 /**
@@ -112,9 +115,9 @@ function convertImageToCmyk(image, options, tacMax) {
  * @returns {Uint8Array|Map<string, Uint8Array>}
  */
 export function convert(input, options = {}) {
-  const targetFormat = options.targetFormat || ExportFormat.PDF_X1A;
+  const targetFormat = (options.targetFormat || options.format || ExportFormat.PDF_X1A).toLowerCase();
   const shouldDownsample = options.downsample !== false;
-  const targetDpi = options.targetDpi || 300;
+  const targetDpi = options.targetDpi || options.dpi || 300;
   const tacMax = options.tacMax || 300;
   const requiresCmyk = targetFormat === ExportFormat.PDF_X1A || targetFormat === ExportFormat.TIFFSEP;
 
@@ -124,6 +127,10 @@ export function convert(input, options = {}) {
 
   if (input instanceof Document) {
     document = input;
+  } else if (input instanceof RasterImage) {
+    image = input;
+  } else if (input instanceof LayeredImage) {
+    image = TransparencyFlattener.flattenToRaster(input);
   } else if (typeof input === 'string') {
     if (SvgDecoder.probe(input)) {
       document = SvgDecoder.decode(input, options);
@@ -168,7 +175,7 @@ export function convert(input, options = {}) {
 
     const processedPages = [];
     for (const page of docStream.streamPages()) {
-      let pageImage = page.rasterBackground;
+      let pageImage = page.image || page.rasterBackground;
       if (pageImage && requiresCmyk && pageImage.colorSpace !== ColorSpaceType.CMYK) {
         pageImage = convertImageToCmyk(pageImage, options, tacMax);
       }
@@ -245,6 +252,33 @@ export function convert(input, options = {}) {
         return SeparationPlateGenerator.generatePlates(firstRaster, options);
       }
 
+      case ExportFormat.JPEG:
+      case ExportFormat.JPG: {
+        let firstRaster = processedDoc.pages.find(p => p.image)?.image || processedDoc.pages.find(p => p.rasterBackground)?.rasterBackground;
+        const firstPage = processedDoc.pages[0];
+        const pageW = firstPage?.widthPts || firstPage?.width || 612;
+        const pageH = firstPage?.heightPts || firstPage?.height || 792;
+        const targetW = Math.round(pageW * (targetDpi / 72));
+        const targetH = Math.round(pageH * (targetDpi / 72));
+
+        if (!firstRaster) {
+          firstRaster = new RasterImage({
+            width: targetW,
+            height: targetH,
+            channels: 3,
+            bitsPerSample: 8,
+            colorSpace: ColorSpaceType.RGB,
+            pixelFormat: PixelFormat.RGB24,
+            dpiX: targetDpi,
+            dpiY: targetDpi,
+            data: new Uint8Array(targetW * targetH * 3).fill(255)
+          });
+        } else if (firstRaster.width > targetW * 1.05 || firstRaster.height > targetH * 1.05) {
+          firstRaster = resample(firstRaster, targetW, targetH, { filter: 'bicubic' });
+        }
+        return JpegWriter.write(firstRaster, { ...options, dpiX: targetDpi, dpiY: targetDpi });
+      }
+
       default:
         throw new Error(`Unsupported export format: ${targetFormat}`);
     }
@@ -273,6 +307,21 @@ export function convert(input, options = {}) {
 
     case ExportFormat.TIFFSEP:
       return SeparationPlateGenerator.generatePlates(processedImage, options);
+
+    case ExportFormat.JPEG:
+    case ExportFormat.JPG: {
+      let finalImg = image;
+      if (options.dpi || options.targetDpi) {
+        const reqDpi = options.dpi || options.targetDpi;
+        if (reqDpi < (image.dpiX || 300)) {
+          const scale = reqDpi / (image.dpiX || 300);
+          const targetW = Math.max(1, Math.round(image.width * scale));
+          const targetH = Math.max(1, Math.round(image.height * scale));
+          finalImg = resample(image, targetW, targetH, { filter: 'bicubic' });
+        }
+      }
+      return JpegWriter.write(finalImg, { ...options, dpiX: targetDpi, dpiY: targetDpi });
+    }
 
     default:
       throw new Error(`Unsupported export format: ${targetFormat}`);
