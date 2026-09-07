@@ -11,6 +11,7 @@ import { PngDecoder, computeCrc32 } from '../../src/ingestion/raster/png/png_dec
 import { TiffWriter } from '../../src/export/tiff/tiff_writer.js';
 import { TiffDecoder } from '../../src/ingestion/raster/tiff/tiff_decoder.js';
 import { RasterImage, ColorSpaceType, PixelFormat } from '../../src/types/image.js';
+import { IccProfile } from '../../src/color/icc/profile.js';
 
 /**
  * Builds a simple PNG buffer.
@@ -132,5 +133,24 @@ describe('Unified Conversion Pipeline: End-to-End Workflows', () => {
     assert.ok(pdfStr.includes('/GTS_PDFXVersion (PDF/X-4)'));
     assert.ok(pdfStr.includes('/Width 100'));
     assert.ok(pdfStr.includes('/Height 100'));
+  });
+
+  it('E2E Workflow 4: Custom source and destination ICC profile configuration in RGB to CMYK conversion', () => {
+    const pngBuffer = createTestPng(20, 20, 300);
+    const customSource = IccProfile.createLinearRgbProfile();
+    const customDest = IccProfile.createCmykReferenceProfile();
+
+    const pdfBytes = convert(pngBuffer, {
+      targetFormat: ExportFormat.PDF_X1A,
+      sourceIccProfile: customSource,
+      targetIccProfile: customDest,
+      tacMax: 280
+    });
+
+    const pdfStr = Buffer.from(pdfBytes).toString('latin1');
+    assert.ok(pdfStr.startsWith('%PDF-1.3'));
+    assert.ok(pdfStr.includes('/GTS_PDFXVersion (PDF/X-1a:2001)'));
+    assert.ok(pdfStr.includes('/ColorSpace /DeviceCMYK'));
+    assert.ok(pdfStr.includes('%%EOF'));
   });
 });

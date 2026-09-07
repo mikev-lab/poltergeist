@@ -50,8 +50,8 @@ function convertImageToCmyk(image, options, tacMax) {
     return image;
   }
 
-  const srcProfile = image.iccProfile || IccProfile.createSrgbProfile();
-  const destProfile = options.targetIccProfile || IccProfile.createCmykReferenceProfile();
+  const srcProfile = options.sourceIccProfile || image.iccProfile || IccProfile.createSrgbProfile();
+  const destProfile = options.targetIccProfile || options.destIccProfile || IccProfile.createCmykReferenceProfile();
 
   const transform = new ColorTransform({
     sourceProfile: srcProfile,
@@ -110,7 +110,8 @@ function convertImageToCmyk(image, options, tacMax) {
  * @param {boolean} [options.downsample=true] Apply prepress threshold downsampling (>450 DPI -> 300 DPI)
  * @param {number} [options.targetDpi=300] Target print resolution
  * @param {number} [options.tacMax=300] Total Area Coverage ink limit (300% SWOP, 320% GRACoL)
- * @param {import('../color/icc/profile.js').IccProfile} [options.targetIccProfile]
+ * @param {import('../color/icc/profile.js').IccProfile} [options.sourceIccProfile] Input RGB/CMYK profile (defaults to image embedded profile or sRGB)
+ * @param {import('../color/icc/profile.js').IccProfile} [options.targetIccProfile] Destination CMYK profile (defaults to Fogra39 reference profile)
  * @param {string} [options.jobName='job']
  * @returns {Uint8Array|Map<string, Uint8Array>}
  */
