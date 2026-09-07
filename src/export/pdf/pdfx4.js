@@ -12,13 +12,14 @@ import {
   PdfString,
   PdfStream
 } from './objects.js';
-import { ColorSpaceType } from '../../types/image.js';
+import { ColorSpaceType, RasterImage } from '../../types/image.js';
+import { Document, PageRecord } from '../../types/document.js';
 import { IccProfile } from '../../color/icc/profile.js';
 
 export class PdfX4Generator {
   /**
-   * Generates a valid PDF/X-4:2010 file from a RasterImage.
-   * @param {import('../../types/image.js').RasterImage} image
+   * Generates a valid PDF/X-4:2010 file from a RasterImage, Document, or PageRecord array.
+   * @param {import('../../types/image.js').RasterImage | import('../../types/document.js').Document | import('../../types/document.js').PageRecord[]} input
    * @param {object} [options]
    * @param {string} [options.title='Poltergeist Prepress Export']
    * @param {string} [options.outputCondition='FOGRA39']
@@ -26,25 +27,46 @@ export class PdfX4Generator {
    * @param {number} [options.bleedPts=9]
    * @returns {Uint8Array}
    */
-  static generate(image, options = {}) {
+  static generate(input, options = {}) {
     const title = options.title || 'Poltergeist Prepress Export';
     const condition = options.outputCondition || 'FOGRA39';
     const conditionId = options.outputConditionIdentifier || 'FOGRA39';
     const bleedPts = options.bleedPts !== undefined ? options.bleedPts : 9;
 
+    let pages = [];
+    let primaryIcc = null;
+
+    if (input instanceof Document) {
+      pages = input.pages;
+    } else if (Array.isArray(input)) {
+      pages = input;
+    } else if (input instanceof RasterImage) {
+      primaryIcc = input.iccProfile;
+      const ptsW = (input.width / input.dpiX) * 72.0;
+      const ptsH = (input.height / input.dpiY) * 72.0;
+      pages = [
+        new PageRecord({
+          pageIndex: 0,
+          widthPts: ptsW,
+          heightPts: ptsH,
+          dpi: input.dpiX,
+          rasterBackground: input
+        })
+      ];
+    } else {
+      throw new TypeError('Unsupported input type for PDF/X-4 generation');
+    }
+
+    if (pages.length === 0) {
+      throw new Error('Cannot generate PDF/X-4 document with zero pages');
+    }
+
     const writer = new PdfWriter('1.6'); // PDF/X-4:2010 is based on PDF 1.6
-
-    const ptsWidth = (image.width / image.dpiX) * 72.0;
-    const ptsHeight = (image.height / image.dpiY) * 72.0;
-
-    const mediaBox = new PdfArray([0, 0, ptsWidth + bleedPts * 2, ptsHeight + bleedPts * 2]);
-    const bleedBox = new PdfArray([0, 0, ptsWidth + bleedPts * 2, ptsHeight + bleedPts * 2]);
-    const trimBox = new PdfArray([bleedPts, bleedPts, ptsWidth + bleedPts, ptsHeight + bleedPts]);
 
     // 1. OutputIntent ICC Profile Stream
     let iccBytes;
-    if (image.iccProfile && image.iccProfile.buffer) {
-      iccBytes = image.iccProfile.buffer;
+    if (primaryIcc && primaryIcc.buffer) {
+      iccBytes = primaryIcc.buffer;
     } else {
       iccBytes = IccProfile.createCmykReferenceProfile().toBuffer();
     }
@@ -64,72 +86,107 @@ export class PdfX4Generator {
     outputIntentDict.set('DestOutputProfile', iccRef);
     const outputIntentRef = writer.addObject(outputIntentDict);
 
-    // 3. Image XObject
-    const imageDict = new PdfDictionary();
-    imageDict.set('Type', new PdfName('XObject'));
-    imageDict.set('Subtype', new PdfName('Image'));
-    imageDict.set('Width', image.width);
-    imageDict.set('Height', image.height);
-
-    if (image.colorSpace === ColorSpaceType.CMYK) {
-      imageDict.set('ColorSpace', new PdfName('DeviceCMYK'));
-    } else if (image.colorSpace === ColorSpaceType.GRAY) {
-      imageDict.set('ColorSpace', new PdfName('DeviceGray'));
-    } else {
-      imageDict.set('ColorSpace', new PdfName('DeviceRGB'));
-    }
-    imageDict.set('BitsPerComponent', 8);
-
-    const imageStream = new PdfStream(imageDict, image.data, true);
-    const imageRef = writer.addObject(imageStream);
-
-    // 4. Page Content Stream
-    const contentCode = [
-      'q',
-      `${ptsWidth.toFixed(4)} 0 0 ${ptsHeight.toFixed(4)} ${bleedPts.toFixed(4)} ${bleedPts.toFixed(4)} cm`,
-      '/Im1 Do',
-      'Q\n'
-    ].join('\n');
-
-    const contentBytes = Buffer.from(contentCode, 'latin1');
-    const contentStream = new PdfStream(new PdfDictionary(), contentBytes, true);
-    const contentRef = writer.addObject(contentStream);
-
-    // 5. Page Resources Dictionary
-    const xObjectDict = new PdfDictionary();
-    xObjectDict.set('Im1', imageRef);
-
-    const resourcesDict = new PdfDictionary();
-    resourcesDict.set('ProcSet', new PdfArray([new PdfName('PDF'), new PdfName('ImageC')]));
-    resourcesDict.set('XObject', xObjectDict);
-
-    // 6. Page Transparency Group
-    const groupDict = new PdfDictionary();
-    groupDict.set('Type', new PdfName('Group'));
-    groupDict.set('S', new PdfName('Transparency'));
-    groupDict.set('CS', new PdfName('DeviceCMYK'));
-
-    // 7. Page Object
-    const pageDict = new PdfDictionary();
-    pageDict.set('Type', new PdfName('Page'));
-    pageDict.set('MediaBox', mediaBox);
-    pageDict.set('BleedBox', bleedBox);
-    pageDict.set('TrimBox', trimBox);
-    pageDict.set('Contents', contentRef);
-    pageDict.set('Resources', resourcesDict);
-    pageDict.set('Group', groupDict);
-    const pageRef = writer.addObject(pageDict);
-
-    // 8. Pages Tree
+    // Pages container dictionary forward reference
     const pagesDict = new PdfDictionary();
     pagesDict.set('Type', new PdfName('Pages'));
-    pagesDict.set('Kids', new PdfArray([pageRef]));
-    pagesDict.set('Count', 1);
     const pagesRef = writer.addObject(pagesDict);
 
-    pageDict.set('Parent', pagesRef);
+    const pageRefs = [];
 
-    // 9. Document Catalog (/Root)
+    // 3. Build Pages
+    for (let pIdx = 0; pIdx < pages.length; pIdx++) {
+      const page = pages[pIdx];
+      const widthPts = page.widthPts;
+      const heightPts = page.heightPts;
+
+      let mediaBox;
+      let bleedBox;
+      let trimBox;
+
+      if (page.pageBox) {
+        mediaBox = new PdfArray(page.pageBox.mediaBox);
+        bleedBox = new PdfArray(page.pageBox.bleedBox);
+        trimBox = new PdfArray(page.pageBox.trimBox);
+      } else {
+        mediaBox = new PdfArray([0, 0, widthPts + bleedPts * 2, heightPts + bleedPts * 2]);
+        bleedBox = new PdfArray([0, 0, widthPts + bleedPts * 2, heightPts + bleedPts * 2]);
+        trimBox = new PdfArray([bleedPts, bleedPts, widthPts + bleedPts, heightPts + bleedPts]);
+      }
+
+      const resourcesDict = new PdfDictionary();
+      resourcesDict.set('ProcSet', new PdfArray([new PdfName('PDF'), new PdfName('ImageC')]));
+
+      const contentLines = [];
+
+      // Raster background
+      if (page.rasterBackground) {
+        const img = page.rasterBackground;
+        const imageDict = new PdfDictionary();
+        imageDict.set('Type', new PdfName('XObject'));
+        imageDict.set('Subtype', new PdfName('Image'));
+        imageDict.set('Width', img.width);
+        imageDict.set('Height', img.height);
+
+        if (img.colorSpace === ColorSpaceType.CMYK) {
+          imageDict.set('ColorSpace', new PdfName('DeviceCMYK'));
+        } else if (img.colorSpace === ColorSpaceType.GRAY) {
+          imageDict.set('ColorSpace', new PdfName('DeviceGray'));
+        } else {
+          imageDict.set('ColorSpace', new PdfName('DeviceRGB'));
+        }
+        imageDict.set('BitsPerComponent', 8);
+
+        const imageStream = new PdfStream(imageDict, img.data, true);
+        const imageRef = writer.addObject(imageStream);
+
+        const xObjectDict = new PdfDictionary();
+        const imgName = `Im${pIdx + 1}`;
+        xObjectDict.set(imgName, imageRef);
+        resourcesDict.set('XObject', xObjectDict);
+
+        const drawX = page.pageBox ? page.pageBox.trimBox[0] : bleedPts;
+        const drawY = page.pageBox ? page.pageBox.trimBox[1] : bleedPts;
+
+        contentLines.push(
+          'q',
+          `${widthPts.toFixed(4)} 0 0 ${heightPts.toFixed(4)} ${drawX.toFixed(4)} ${drawY.toFixed(4)} cm`,
+          `/${imgName} Do`,
+          'Q'
+        );
+      }
+
+      if (contentLines.length === 0) {
+        contentLines.push('q Q');
+      }
+
+      const contentBytes = Buffer.from(contentLines.join('\n') + '\n', 'latin1');
+      const contentStream = new PdfStream(new PdfDictionary(), contentBytes, true);
+      const contentRef = writer.addObject(contentStream);
+
+      // Page Transparency Group
+      const groupDict = new PdfDictionary();
+      groupDict.set('Type', new PdfName('Group'));
+      groupDict.set('S', new PdfName('Transparency'));
+      groupDict.set('CS', new PdfName('DeviceCMYK'));
+
+      const pageDict = new PdfDictionary();
+      pageDict.set('Type', new PdfName('Page'));
+      pageDict.set('Parent', pagesRef);
+      pageDict.set('MediaBox', mediaBox);
+      pageDict.set('BleedBox', bleedBox);
+      pageDict.set('TrimBox', trimBox);
+      pageDict.set('Contents', contentRef);
+      pageDict.set('Resources', resourcesDict);
+      pageDict.set('Group', groupDict);
+
+      const pageRef = writer.addObject(pageDict);
+      pageRefs.push(pageRef);
+    }
+
+    pagesDict.set('Kids', new PdfArray(pageRefs));
+    pagesDict.set('Count', pageRefs.length);
+
+    // Document Catalog (/Root)
     const catalogDict = new PdfDictionary();
     catalogDict.set('Type', new PdfName('Catalog'));
     catalogDict.set('Pages', pagesRef);
@@ -137,7 +194,7 @@ export class PdfX4Generator {
     const rootRef = writer.addObject(catalogDict);
     writer.rootRef = rootRef;
 
-    // 10. Document Info Dictionary (/Info)
+    // Document Info Dictionary (/Info)
     const infoDict = new PdfDictionary();
     infoDict.set('Title', new PdfString(title));
     infoDict.set('Creator', new PdfString('Poltergeist Prepress Engine'));
@@ -149,3 +206,4 @@ export class PdfX4Generator {
     return writer.compile();
   }
 }
+

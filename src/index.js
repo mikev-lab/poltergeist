@@ -37,6 +37,24 @@ export * from './compositor/font/font_outliner.js';
 // Prepress Export (PDF/X-1a, PDF/X-4, TIFF, Separation Plates)
 export * from './export/index.js';
 
+// Document Types
+export * from './types/document.js';
+
+// Document & Archive Ingestion
+export * from './ingestion/common/zip_reader.js';
+export * from './ingestion/pdf/pdf_decoder.js';
+export * from './ingestion/pdf/lexer.js';
+export * from './ingestion/pdf/parser.js';
+export * from './ingestion/pdf/xref.js';
+export * from './ingestion/pdf/repair.js';
+export * from './ingestion/pdf/filters.js';
+export * from './ingestion/pdf/page_tree.js';
+export * from './ingestion/document/index.js';
+
+// Document Stream Processing
+export * from './compositor/assembly/document_stream.js';
+
 // High-speed Conversion Pipeline
 export * from './pipeline/convert.js';
+
 
