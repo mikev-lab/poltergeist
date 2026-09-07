@@ -15,6 +15,8 @@ import { RawMetadata, CfaPattern } from '../src/ingestion/raw/cfa.js';
 import { RawDemosaicer } from '../src/ingestion/raw/demosaic.js';
 import { TransparencyFlattener } from '../src/compositor/flattener/transparency_flattener.js';
 import { SeparationPlateGenerator } from '../src/export/tiffsep/plate_generator.js';
+import { JpegDecoder } from '../src/ingestion/raster/jpeg/jpeg_decoder.js';
+import { JpegWriter } from '../src/export/jpeg/jpeg_writer.js';
 import { convert, ExportFormat } from '../src/pipeline/convert.js';
 
 export const BENCHMARK_SCENARIOS = [
@@ -160,6 +162,68 @@ export const BENCHMARK_SCENARIOS = [
     },
     megabytes(cmykImage) {
       return (cmykImage.width * cmykImage.height * 4) / (1024 * 1024);
+    }
+  },
+
+  {
+    name: 'JPEG Ingestion & Scaled IDCT (1/4 Scale 2x2 IDCT)',
+    setup() {
+      const width = 800;
+      const height = 800;
+      const data = new Uint8Array(width * height * 3);
+      for (let i = 0; i < data.length; i++) data[i] = (i * 23) & 0xff;
+      const image = new RasterImage({
+        width,
+        height,
+        channels: 3,
+        bitsPerSample: 8,
+        colorSpace: ColorSpaceType.RGB,
+        pixelFormat: PixelFormat.RGB24,
+        dpiX: 300,
+        dpiY: 300,
+        data
+      });
+      const jpegBytes = JpegWriter.write(image, { quality: 85 });
+      return { jpegBytes, width, height };
+    },
+    run({ jpegBytes }) {
+      return JpegDecoder.decode(jpegBytes, { scaleDenom: 4 });
+    },
+    megapixels({ width, height }) {
+      return (width * height) / 1_000_000;
+    },
+    megabytes({ jpegBytes }) {
+      return jpegBytes.byteLength / (1024 * 1024);
+    }
+  },
+
+  {
+    name: 'JPEG Export Encoding (Pure Native JpegWriter Baseline)',
+    setup() {
+      const width = 800;
+      const height = 800;
+      const data = new Uint8Array(width * height * 3);
+      for (let i = 0; i < data.length; i++) data[i] = (i * 23) & 0xff;
+      return new RasterImage({
+        width,
+        height,
+        channels: 3,
+        bitsPerSample: 8,
+        colorSpace: ColorSpaceType.RGB,
+        pixelFormat: PixelFormat.RGB24,
+        dpiX: 300,
+        dpiY: 300,
+        data
+      });
+    },
+    run(image) {
+      return JpegWriter.write(image, { quality: 85, dpiX: 72, dpiY: 72 });
+    },
+    megapixels(image) {
+      return (image.width * image.height) / 1_000_000;
+    },
+    megabytes(image) {
+      return image.data.byteLength / (1024 * 1024);
     }
   }
 ];

@@ -7,6 +7,7 @@
 
 import { RasterImage, PixelFormat, ColorSpaceType, calculateBufferSize } from '../../../types/image.js';
 import { IccProfile } from '../../../color/icc/profile.js';
+import { fastIdct8x8, idct4x4, idct2x2, idct1x1, wasmIdct } from './idct_wasm.js';
 
 // Standard 8x8 Zig-Zag scan order (ITU-T T.81 Figure A.6)
 const ZIGZAG = new Uint8Array([
@@ -21,38 +22,13 @@ const ZIGZAG = new Uint8Array([
 ]);
 
 /**
- * 8x8 Inverse Discrete Cosine Transform (AAN algorithm / standard 2D IDCT).
+ * 8x8 Inverse Discrete Cosine Transform.
+ * Uses precomputed cosine basis vectors and reusable buffers.
  * @param {Float64Array} block 64 coefficients
  * @param {Uint8Array} out 64 pixel values clamped to 0..255
  */
 export function idct8x8(block, out) {
-  const temp = new Float64Array(64);
-
-  // Horizontal IDCT
-  for (let y = 0; y < 8; y++) {
-    const y8 = y * 8;
-    for (let x = 0; x < 8; x++) {
-      let sum = 0;
-      for (let u = 0; u < 8; u++) {
-        const cu = u === 0 ? 0.7071067811865475 : 1.0;
-        sum += cu * block[y8 + u] * Math.cos(((2 * x + 1) * u * Math.PI) / 16.0);
-      }
-      temp[y8 + x] = 0.5 * sum;
-    }
-  }
-
-  // Vertical IDCT
-  for (let x = 0; x < 8; x++) {
-    for (let y = 0; y < 8; y++) {
-      let sum = 0;
-      for (let v = 0; v < 8; v++) {
-        const cv = v === 0 ? 0.7071067811865475 : 1.0;
-        sum += cv * temp[v * 8 + x] * Math.cos(((2 * y + 1) * v * Math.PI) / 16.0);
-      }
-      const val = Math.round(0.5 * sum + 128.0);
-      out[y * 8 + x] = val < 0 ? 0 : val > 255 ? 255 : val;
-    }
-  }
+  fastIdct8x8(block, out);
 }
 
 /**
@@ -227,10 +203,15 @@ class JpegBitReader {
 export class JpegDecoder {
   /**
    * Decodes a JPEG binary buffer into a RasterImage.
+   * Supports optional scaleDenom (1, 2, 4, 8) for high-performance scaled IDCT decoding.
    * @param {Uint8Array|Buffer} buffer 
+   * @param {object} [options]
+   * @param {number} [options.scaleDenom=1] Spatial scaling denominator (1=full, 2=1/2, 4=1/4, 8=1/8)
+   * @param {number} [options.targetDpi] Optional target DPI used to select optimal scaleDenom
+   * @param {number} [options.targetWidth] Optional target width used to select optimal scaleDenom
    * @returns {RasterImage}
    */
-  static decode(buffer) {
+  static decode(buffer, options = {}) {
     const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
     if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) {
       throw new Error('Invalid JPEG stream: SOI marker 0xFFD8 not found.');
@@ -380,6 +361,30 @@ export class JpegDecoder {
         const scanDataOffset = payloadEnd;
         const bitReader = new JpegBitReader(bytes, scanDataOffset);
 
+        let scaleDenom = 1;
+        if (options && typeof options === 'object') {
+          if (options.scaleDenom === 2 || options.scaleDenom === 4 || options.scaleDenom === 8) {
+            scaleDenom = options.scaleDenom;
+          } else if (options.scale === 0.5) {
+            scaleDenom = 2;
+          } else if (options.scale === 0.25) {
+            scaleDenom = 4;
+          } else if (options.scale === 0.125) {
+            scaleDenom = 8;
+          } else if (options.targetDpi || options.dpi) {
+            const reqDpi = options.targetDpi || options.dpi;
+            const ratio = reqDpi / dpiX;
+            if (ratio <= 0.15) scaleDenom = 8;
+            else if (ratio <= 0.35) scaleDenom = 4;
+            else if (ratio <= 0.70) scaleDenom = 2;
+          } else if (options.targetWidth) {
+            const ratio = options.targetWidth / width;
+            if (ratio <= 0.15) scaleDenom = 8;
+            else if (ratio <= 0.35) scaleDenom = 4;
+            else if (ratio <= 0.70) scaleDenom = 2;
+          }
+        }
+
         return JpegDecoder._decodeScan({
           bitReader,
           width,
@@ -392,7 +397,8 @@ export class JpegDecoder {
           dpiY,
           adobeTransform,
           iccChunks,
-          restartInterval
+          restartInterval,
+          scaleDenom
         });
       }
     }
@@ -402,6 +408,7 @@ export class JpegDecoder {
 
   /**
    * Decodes MCU blocks and produces output RasterImage.
+   * Supports scaled IDCT (1, 2, 4, 8) for ultra-fast downscaled decoding.
    * @private
    */
   static _decodeScan({
@@ -416,7 +423,8 @@ export class JpegDecoder {
     dpiY,
     adobeTransform,
     iccChunks,
-    restartInterval = 0
+    restartInterval = 0,
+    scaleDenom = 1
   }) {
     // Reconstruct ICC profile if chunks exist
     let iccProfile = null;
@@ -451,12 +459,33 @@ export class JpegDecoder {
     const mcusX = Math.ceil(width / mcuWidth);
     const mcusY = Math.ceil(height / mcuHeight);
 
-    // Component planes in memory
-    const planes = components.map(c => new Uint8Array(mcusX * c.hFactor * 8 * mcusY * c.vFactor * 8));
+    const blockSize = 8 / scaleDenom;
+    const scaledWidth = Math.ceil(width / scaleDenom);
+    const scaledHeight = Math.ceil(height / scaleDenom);
+    const scaledDpiX = Math.max(1, Math.round(dpiX / scaleDenom));
+    const scaledDpiY = Math.max(1, Math.round(dpiY / scaleDenom));
+
+    let idctFn;
+    let blockPixels;
+    if (scaleDenom === 8) {
+      idctFn = idct1x1;
+      blockPixels = new Uint8Array(1);
+    } else if (scaleDenom === 4) {
+      idctFn = idct2x2;
+      blockPixels = new Uint8Array(4);
+    } else if (scaleDenom === 2) {
+      idctFn = idct4x4;
+      blockPixels = new Uint8Array(16);
+    } else {
+      idctFn = wasmIdct.isAvailable() ? (b, o) => wasmIdct.idct8x8(b, o) : fastIdct8x8;
+      blockPixels = new Uint8Array(64);
+    }
+
+    // Component planes in memory (scaled to blockSize)
+    const planes = components.map(c => new Uint8Array(mcusX * c.hFactor * blockSize * mcusY * c.vFactor * blockSize));
     const prevDc = new Int32Array(numComponents);
 
     const blockCoeffs = new Float64Array(64);
-    const blockPixels = new Uint8Array(64);
 
     let mcuCount = 0;
 
@@ -475,7 +504,7 @@ export class JpegDecoder {
           const dcTable = dcTables[comp.dcTableIdx] || dcTables[0];
           const acTable = acTables[comp.acTableIdx] || acTables[0];
           const plane = planes[c];
-          const planeStride = mcusX * comp.hFactor * 8;
+          const planeStride = mcusX * comp.hFactor * blockSize;
 
           for (let vy = 0; vy < comp.vFactor; vy++) {
             for (let hx = 0; hx < comp.hFactor; hx++) {
@@ -512,15 +541,15 @@ export class JpegDecoder {
                 }
               }
 
-              // IDCT
-              idct8x8(blockCoeffs, blockPixels);
+              // IDCT (Scaled or full-resolution)
+              idctFn(blockCoeffs, blockPixels);
 
               // Copy block into plane
-              const blockStartX = (mx * comp.hFactor + hx) * 8;
-              const blockStartY = (my * comp.vFactor + vy) * 8;
-              for (let by = 0; by < 8; by++) {
+              const blockStartX = (mx * comp.hFactor + hx) * blockSize;
+              const blockStartY = (my * comp.vFactor + vy) * blockSize;
+              for (let by = 0; by < blockSize; by++) {
                 const destOffset = (blockStartY + by) * planeStride + blockStartX;
-                plane.set(blockPixels.subarray(by * 8, by * 8 + 8), destOffset);
+                plane.set(blockPixels.subarray(by * blockSize, by * blockSize + blockSize), destOffset);
               }
             }
           }
@@ -530,40 +559,40 @@ export class JpegDecoder {
 
     // Color conversion to final output image
     if (numComponents === 1) { // Grayscale
-      const outData = new Uint8Array(width * height);
+      const outData = new Uint8Array(scaledWidth * scaledHeight);
       const plane = planes[0];
-      const planeStride = mcusX * 8;
-      for (let y = 0; y < height; y++) {
-        outData.set(plane.subarray(y * planeStride, y * planeStride + width), y * width);
+      const planeStride = mcusX * components[0].hFactor * blockSize;
+      for (let y = 0; y < scaledHeight; y++) {
+        outData.set(plane.subarray(y * planeStride, y * planeStride + scaledWidth), y * scaledWidth);
       }
       return new RasterImage({
-        width,
-        height,
+        width: scaledWidth,
+        height: scaledHeight,
         channels: 1,
         bitsPerSample: 8,
         colorSpace: ColorSpaceType.GRAY,
         pixelFormat: PixelFormat.GRAY8,
-        dpiX,
-        dpiY,
+        dpiX: scaledDpiX,
+        dpiY: scaledDpiY,
         data: outData,
         iccProfile
       });
     } else if (numComponents === 3) { // YCbCr to RGB
-      const outData = new Uint8Array(width * height * 3);
+      const outData = new Uint8Array(scaledWidth * scaledHeight * 3);
       const [planeY, planeCb, planeCr] = planes;
-      const strideY = mcusX * components[0].hFactor * 8;
-      const strideCb = mcusX * components[1].hFactor * 8;
-      const strideCr = mcusX * components[2].hFactor * 8;
+      const strideY = mcusX * components[0].hFactor * blockSize;
+      const strideCb = mcusX * components[1].hFactor * blockSize;
+      const strideCr = mcusX * components[2].hFactor * blockSize;
       const hRatioCb = components[0].hFactor / components[1].hFactor;
       const vRatioCb = components[0].vFactor / components[1].vFactor;
 
       let outIdx = 0;
-      for (let y = 0; y < height; y++) {
+      for (let y = 0; y < scaledHeight; y++) {
         const yOffset = y * strideY;
         const cbOffset = Math.floor(y / vRatioCb) * strideCb;
         const crOffset = Math.floor(y / vRatioCb) * strideCr;
 
-        for (let x = 0; x < width; x++) {
+        for (let x = 0; x < scaledWidth; x++) {
           const Y = planeY[yOffset + x];
           const cbX = Math.floor(x / hRatioCb);
           const Cb = planeCb[cbOffset + cbX] - 128;
@@ -580,26 +609,26 @@ export class JpegDecoder {
       }
 
       return new RasterImage({
-        width,
-        height,
+        width: scaledWidth,
+        height: scaledHeight,
         channels: 3,
         bitsPerSample: 8,
         colorSpace: ColorSpaceType.RGB,
         pixelFormat: PixelFormat.RGB24,
-        dpiX,
-        dpiY,
+        dpiX: scaledDpiX,
+        dpiY: scaledDpiY,
         data: outData,
         iccProfile
       });
     } else if (numComponents === 4) { // CMYK or YCCK
-      const outData = new Uint8Array(width * height * 4);
+      const outData = new Uint8Array(scaledWidth * scaledHeight * 4);
       const [plane0, plane1, plane2, plane3] = planes;
-      const stride0 = mcusX * components[0].hFactor * 8;
+      const stride0 = mcusX * components[0].hFactor * blockSize;
 
       let outIdx = 0;
-      for (let y = 0; y < height; y++) {
+      for (let y = 0; y < scaledHeight; y++) {
         const rowOffset = y * stride0;
-        for (let x = 0; x < width; x++) {
+        for (let x = 0; x < scaledWidth; x++) {
           if (adobeTransform === 2) { // YCCK -> CMYK
             const Y = plane0[rowOffset + x];
             const Cb = plane1[rowOffset + x] - 128;
@@ -624,14 +653,14 @@ export class JpegDecoder {
       }
 
       return new RasterImage({
-        width,
-        height,
+        width: scaledWidth,
+        height: scaledHeight,
         channels: 4,
         bitsPerSample: 8,
         colorSpace: ColorSpaceType.CMYK,
         pixelFormat: PixelFormat.CMYK32,
-        dpiX,
-        dpiY,
+        dpiX: scaledDpiX,
+        dpiY: scaledDpiY,
         data: outData,
         iccProfile
       });

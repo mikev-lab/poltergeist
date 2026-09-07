@@ -161,7 +161,7 @@ export function convert(input, options = {}) {
         const layered = decodeLayered(bytes);
         image = TransparencyFlattener.flattenToRaster(layered);
       } else {
-        image = decodeRaster(bytes);
+        image = decodeRaster(bytes, options);
       }
     }
   }
@@ -273,7 +273,7 @@ export function convert(input, options = {}) {
             dpiY: targetDpi,
             data: new Uint8Array(targetW * targetH * 3).fill(255)
           });
-        } else if (firstRaster.width > targetW * 1.05 || firstRaster.height > targetH * 1.05) {
+        } else if (firstRaster.width !== targetW || firstRaster.height !== targetH) {
           firstRaster = resample(firstRaster, targetW, targetH, { filter: 'bicubic' });
         }
         return JpegWriter.write(firstRaster, { ...options, dpiX: targetDpi, dpiY: targetDpi });

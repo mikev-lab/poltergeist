@@ -32,7 +32,7 @@ export function decodeRaster(buffer, options = {}) {
 
   // JPEG: \xFF\xD8
   if (bytes[0] === 0xff && bytes[1] === 0xd8) {
-    return JpegDecoder.decode(bytes);
+    return JpegDecoder.decode(bytes, options);
   }
 
   // TIFF: 'II' or 'MM' with magic 42

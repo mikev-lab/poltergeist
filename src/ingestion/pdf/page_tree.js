@@ -14,10 +14,12 @@ export class PageTreeTraverser {
   /**
    * @param {Uint8Array} bytes
    * @param {import('./xref.js').PdfXrefTable} xref
+   * @param {object} [options]
    */
-  constructor(bytes, xref) {
+  constructor(bytes, xref, options = {}) {
     this.bytes = bytes;
     this.xref = xref;
+    this.options = options;
     this.objectCache = new Map();
   }
 
@@ -146,7 +148,7 @@ export class PageTreeTraverser {
                 const filter = xObj.get('Filter');
                 if (filter === 'DCTDecode' || (Array.isArray(filter) && filter.includes('DCTDecode'))) {
                   try {
-                    pageImage = JpegDecoder.decode(stream);
+                    pageImage = JpegDecoder.decode(stream, this.options);
                     break;
                   } catch {
                     // Non-fatal

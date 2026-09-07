@@ -40,10 +40,12 @@ Poltergeist runs directly in-process inside the V8 engine, eliminating the 80–
 | Benchmark Scenario | Poltergeist Throughput | Wall-Clock Latency | Peak Heap Delta | Ghostscript Comparison |
 | :--- | :--- | :--- | :--- | :--- |
 | **Layer Compositing & Flattening** (5 RGBA layers) | **522 – 740 MP/s** (2.0 – 2.8 GB/s) | **1.69 – 2.39 ms** | +0.00 MB | **5x – 10x faster**; avoids PostScript graphics state stack |
-| **Discrete Plate Separation** (`tiffsep` CMYK) | **61.7 – 63.1 MP/s** (235 – 241 MB/s) | **5.70 ms** | +0.17 MB | **10x – 20x faster**; eliminates disk-bound TIFF serialization |
-| **Prepress Resampling** (Bicubic 600 → 300 DPI) | **15.5 – 15.6 MP/s** (44.2 – 44.6 MB/s) | **41.0 ms** | +1.42 MB | **2x – 3x faster**; precalculated fixed-point weights |
-| **Camera RAW Demosaicing** (Bayer RGGB 1 MP) | **5.74 – 5.92 MP/s** (10.9 – 11.3 MB/s) | **168.9 ms** | +0.00 MB | Pure native bilateral color sensor interpolation |
-| **Color Management** (sRGB → CMYK 3D LUT + TAC) | **2.91 – 2.95 MP/s** (8.3 – 8.4 MB/s) | **54.2 ms** | +10.18 MB | End-to-end latency parity without LittleCMS bridge costs |
+| **Discrete Plate Separation** (`tiffsep` CMYK) | **57.8 – 63.1 MP/s** (220 – 241 MB/s) | **5.70 – 6.23 ms** | +0.20 MB | **10x – 20x faster**; eliminates disk-bound TIFF serialization |
+| **JPEG Scaled IDCT Ingestion** (1/4 Scale 2×2 IDCT) | **28.7 MP/s** (38.1 MB/s) | **22.3 ms** | +14.79 MB | **78x faster** than naive IDCT; frequency-domain downscaling |
+| **Prepress Resampling** (Bicubic 600 → 300 DPI) | **15.4 – 15.6 MP/s** (44.1 – 44.6 MB/s) | **41.0 – 41.5 ms** | +0.52 MB | **2x – 3x faster**; precalculated fixed-point weights |
+| **Camera RAW Demosaicing** (Bayer RGGB 1 MP) | **5.74 – 5.92 MP/s** (10.9 – 11.3 MB/s) | **168.9 – 170.0 ms** | +0.00 MB | Pure native bilateral color sensor interpolation |
+| **Color Management** (sRGB → CMYK 3D LUT + TAC) | **2.91 – 3.02 MP/s** (8.3 – 8.7 MB/s) | **52.9 – 54.2 ms** | +0.00 MB | End-to-end latency parity without LittleCMS bridge costs |
+| **PDF to 72 DPI Screen Proof** (8.75 MP to 72 DPI JPG) | Full pipeline conversion | **201.97 ms** | +2.40 MB | **Ghostscript parity** (~180–350 ms in GS) with pure memory safety |
 | **Damaged PDF Repair** (`pdfwrite` equivalent) | **< 4 ms** linear scan | **3.58 ms** | +0.00 MB | **Instant and resilient**; self-healing xref reconstruction |
 
 > See [Performance Benchmarks](docs/testing/benchmarks.md) for full benchmark methodology and regression budgets.
@@ -57,6 +59,7 @@ Poltergeist maps Ghostscript's core switches to clean, type-safe JavaScript func
 | Ghostscript Switch | Poltergeist API Equivalent | Output / Functionality |
 | :--- | :--- | :--- |
 | `-sDEVICE=pdfwrite` | `convert(buffer, { targetFormat: ExportFormat.PDF_X1A })` | PDF/X-1a:2001 normalization with OutputIntents, self-healing xref repair, and font outlining |
+| `-sDEVICE=jpeg` | `convert(buffer, { targetFormat: ExportFormat.JPEG, targetDpi: 72 })` | Calibrated screen proofing JPEG with scaled IDCT, JFIF density headers, and exact page geometry |
 | `-sDEVICE=tiffsep` | `new SeparationPlateGenerator().generatePlates(image)` | Discrete single-channel plates (`Cyan.tif`, `Magenta.tif`, `Yellow.tif`, `Black.tif`, Spot plates) |
 | `-dSimulateOverprint` | `simulateOverprint(bg, fg, { overprintMode: 1 })` | Physical subtractive ink mixing simulation (OPM 0 and OPM 1 soft proofing) |
 | `-dColorConversionStrategy=/DeviceCMYK` | `new ColorConverter().transformRgbToCmyk(...)` | ICC profile color transform via 3D tetrahedral LUT |

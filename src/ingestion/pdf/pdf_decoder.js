@@ -54,7 +54,7 @@ export class PdfDecoder {
       xref = PdfRepair.repair(bytes);
     }
 
-    const traverser = new PageTreeTraverser(bytes, xref);
+    const traverser = new PageTreeTraverser(bytes, xref, options);
     const pages = traverser.traversePages();
 
     let title = 'Document';

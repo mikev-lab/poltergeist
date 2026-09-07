@@ -29,6 +29,7 @@ Poltergeist maps Ghostscript's core prepress switches and output devices to pure
 | Ghostscript Command / Switch | Poltergeist Equivalent Pipeline | Status & Behavioral Parity |
 | :--- | :--- | :--- |
 | `-sDEVICE=pdfwrite` | `PdfWriter` + `PdfDecoder` (`targetFormat: PDF_X1A`) | **100% Equivalent**. Generates ISO 15930 PDF/X-1a, PDF/X-4 with OutputIntents, cross-reference tables, and font outlines. |
+| `-sDEVICE=jpeg` | `JpegWriter` + `JpegDecoder` (`targetFormat: JPEG`) | **100% Equivalent**. Emits calibrated screen proofing JPEG with scaled IDCT (1/2, 1/4, 1/8), JFIF density headers, and exact page geometry. |
 | `-sDEVICE=tiffsep` | `SeparationPlateGenerator` (`targetFormat: TIFFSEP`) | **100% Equivalent**. Emits composite CMYK TIFF and discrete single-channel separation plates (Cyan, Magenta, Yellow, Black, plus spot plates). |
 | `-dSimulateOverprint` | `simulateOverprint()` (`src/color/overprint/`) | **100% Equivalent**. Models subtractive ink physical mixing, supporting Overprint Mode (OPM 0 and OPM 1) without hue reversal. |
 | `-dColorConversionStrategy=/DeviceCMYK` | `ColorConverter` + `TacLimiter` (`src/color/`) | **100% Equivalent**. Transforms sRGB/RGB to DeviceCMYK using 3D LUT tetrahedral interpolation and enforces 300% SWOP TAC. |
