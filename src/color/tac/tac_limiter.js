@@ -80,3 +80,28 @@ export function limitTac(cmyk, maxTacPercent = PrepressTacLimits.SWOP_COATED, gc
 
   return new CmykColor(c, m, y, k);
 }
+
+/**
+ * Object-oriented wrapper for TAC limiting.
+ */
+export class TacLimiter {
+  /**
+   * @param {object} [options]
+   * @param {number} [options.maxTac=300.0]
+   * @param {number} [options.gcrStrength=0.8]
+   */
+  constructor(options = {}) {
+    this.maxTac = options.maxTac ?? 300.0;
+    this.gcrStrength = options.gcrStrength ?? 0.8;
+    Object.freeze(this);
+  }
+
+  /**
+   * Enforces TAC limit on a CMYK color.
+   * @param {CmykColor} cmyk 
+   * @returns {CmykColor}
+   */
+  limit(cmyk) {
+    return limitTac(cmyk, this.maxTac, this.gcrStrength);
+  }
+}

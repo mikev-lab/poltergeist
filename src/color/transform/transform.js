@@ -70,10 +70,20 @@ export class ColorTransform {
    * @param {IccProfile} destProfile
    * @param {number} [renderingIntent=RenderingIntent.RELATIVE_COLORIMETRIC]
    */
-  constructor(sourceProfile, destProfile, renderingIntent = RenderingIntent.RELATIVE_COLORIMETRIC) {
-    this.sourceProfile = sourceProfile;
-    this.destProfile = destProfile;
-    this.renderingIntent = renderingIntent;
+  constructor(sourceProfileOrOptions, destProfile, renderingIntent = RenderingIntent.RELATIVE_COLORIMETRIC) {
+    let srcProf = sourceProfileOrOptions;
+    let dstProf = destProfile;
+    let intent = renderingIntent;
+
+    if (sourceProfileOrOptions && typeof sourceProfileOrOptions === 'object' && !('isMatrixShaper' in sourceProfileOrOptions)) {
+      srcProf = sourceProfileOrOptions.sourceProfile;
+      dstProf = sourceProfileOrOptions.destProfile || sourceProfileOrOptions.destinationProfile;
+      intent = sourceProfileOrOptions.renderingIntent ?? RenderingIntent.RELATIVE_COLORIMETRIC;
+    }
+
+    this.sourceProfile = srcProf;
+    this.destProfile = dstProf;
+    this.renderingIntent = intent;
 
     // Cache matrix inverse if source or destination is matrix/shaper
     if (this.sourceProfile.isMatrixShaper()) {
@@ -96,6 +106,21 @@ export class ColorTransform {
       this.dstGtrc = this.destProfile.getTag('gTRC');
       this.dstBtrc = this.destProfile.getTag('bTRC');
     }
+  }
+
+  /**
+   * Generic transform method routing by color space.
+   * @param {RgbColor|CmykColor} color 
+   * @returns {CmykColor|LabColor}
+   */
+  transform(color) {
+    if ('r' in color && 'g' in color && 'b' in color) {
+      return this.transformRgbToCmyk(color);
+    }
+    if ('c' in color && 'm' in color && 'y' in color && 'k' in color) {
+      return this.transformCmykToLab(color);
+    }
+    throw new TypeError('Unsupported input color format for ColorTransform.transform');
   }
 
   /**

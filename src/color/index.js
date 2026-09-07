@@ -70,6 +70,7 @@ export {
 export {
   PrepressTacLimits,
   limitTac,
+  TacLimiter,
 } from './tac/tac_limiter.js';
 
 export {
