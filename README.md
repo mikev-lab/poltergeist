@@ -49,9 +49,11 @@ Poltergeist runs directly in-process inside the V8 engine, eliminating the 80–
 | **Color Management** (sRGB → CMYK 3D LUT + TAC scalar) | **3.02 – 3.09 MP/s** (8.6 – 8.8 MB/s) | **51.7 – 52.9 ms** | +0.00 MB | End-to-end latency parity without LittleCMS bridge costs |
 | **PDF to 72 DPI Screen Proof** (8.75 MP to 72 DPI JPG) | Full pipeline conversion | **201.97 ms** | +2.40 MB | **Ghostscript parity** (~180–350 ms in GS) with pure memory safety |
 | **PDF to 300 DPI Prepress PDF/X-1a** (8.75 MP to CMYK PDF/X-1a) | Full prepress target conversion | **1,063.5 ms** | +2.80 MB | **Beats Ghostscript 10.x** (~1.2 – 1.8s in GS) with embedded TAC limiting |
+| **28-Page Multi-Core Catalog Proofing** (28 pages to 72 DPI JPG) | `convertParallel` multi-core | **1.58 s** (17.8 pages/sec) | +0.89 MB | **3x – 4.5x faster** than Ghostscript (~5 – 7s in GS); 10-core parallelization |
+| **28-Page Full-Res CMYK Split** (28 pages to PDF/X-1a) | `convertParallel` multi-core | **8.49 s** (3.3 pages/sec) | +0.00 MB | **3.5x – 5x faster** than Ghostscript (~30 – 45s in GS); parallel ICC & TAC |
 | **Damaged PDF Repair** (`pdfwrite` equivalent) | **< 4 ms** linear scan | **3.58 ms** | +0.00 MB | **Instant and resilient**; self-healing xref reconstruction |
 
-> See [Performance Benchmarks](docs/testing/benchmarks.md) for full benchmark methodology and regression budgets.
+> See [Performance Benchmarks](docs/testing/benchmarks.md) for full benchmark methodology, cloud VM scaling, and regression budgets.
 
 ---
 

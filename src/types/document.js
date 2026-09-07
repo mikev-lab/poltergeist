@@ -79,6 +79,8 @@ export class PageRecord {
     paths = [],
     image = null,
     rasterBackground = null,
+    rawImageStream = null,
+    imageLoader = null,
     text = '',
     resources = {},
     metadata = {}
@@ -98,7 +100,26 @@ export class PageRecord {
     this.dpi = dpi > 0 ? dpi : 300;
     this.layers = Object.freeze([...layers]);
     this.paths = Object.freeze([...paths]);
-    this.image = image || rasterBackground || null;
+    this.rawImageStream = rawImageStream;
+    let _cachedImage = typeof image === 'function' ? null : (image || rasterBackground || null);
+    const _loader = typeof image === 'function' ? image : imageLoader;
+    Object.defineProperty(this, 'image', {
+      get() {
+        if (!_cachedImage && _loader) {
+          try {
+            _cachedImage = _loader();
+          } catch {
+            // Non-fatal
+          }
+        }
+        return _cachedImage;
+      },
+      set(v) {
+        _cachedImage = v;
+      },
+      enumerable: true,
+      configurable: true
+    });
     this.text = text;
     this.resources = Object.freeze({ ...resources });
     this.metadata = Object.freeze({ ...metadata });

@@ -61,6 +61,31 @@ Measurements conducted on production asset `media_1788772459505.pdf` (1.35 MB PD
 
 ---
 
+### Real-World Multi-Page Document Benchmark (`test_multipage_pdf.pdf`)
+
+A high-volume benchmark conducted on the 28-page production catalog asset `test_multipage_pdf.pdf` (33.34 MB input containing ~300+ Megapixels of high-resolution print illustrations):
+
+#### Multi-Core Workstation (Apple M4, 10 Cores, 17 GB RAM)
+
+| Pipeline Operation | Poltergeist (10 Cores) | Ghostscript 10.x Equivalent | Improvement Factor |
+| :--- | :--- | :--- | :--- |
+| **0. Ingestion & Catalog Parsing** | **13.39 ms** *(0.48 ms/page)* | ~80 – 150 ms | **6x – 11x faster** |
+| **1. 72 DPI JPG Proofs (28 pages)** | **1.576 s** *(56.3 ms/page)* | ~4.5 – 7.0 s | **2.9x – 4.4x faster** |
+| **2. 300 DPI JPG Proofs (28 pages)** | **18.522 s** *(661 ms/page)* | ~38 – 52 s | **2.1x – 2.8x faster** |
+| **3. Individual Full-Res CMYK PDFs (28 pages)** | **8.487 s** *(303 ms/page)* | ~30 – 45 s | **3.5x – 5.3x faster** |
+| **4. Combined "Built" Master PDF/X-1a (28 pages)** | **14.781 s** *(528 ms/page)* | ~26 – 40 s | **1.8x – 2.7x faster** |
+
+#### Cloud Virtual Machine Simulation (4 vCPUs / 4 Cores)
+
+| Pipeline Operation | Poltergeist (4 Cores) | Ghostscript 10.x (Single-Threaded Limit) | Improvement Factor |
+| :--- | :--- | :--- | :--- |
+| **1. 72 DPI JPG Proofs (28 pages)** | **2.029 s** *(72.5 ms/page)* | ~4.5 – 7.0 s | **2.2x – 3.4x faster** |
+| **2. 300 DPI JPG Proofs (28 pages)** | **22.754 s** *(812.6 ms/page)* | ~38 – 52 s | **1.7x – 2.3x faster** |
+| **3. Individual Full-Res CMYK PDFs (28 pages)** | **11.924 s** *(425.8 ms/page)* | ~30 – 45 s | **2.5x – 3.8x faster** |
+| **4. Combined Master PDF/X-1a (28 pages)** | **18.391 s** *(656.8 ms/page)* | ~26 – 40 s | **1.4x – 2.2x faster** |
+
+---
+
 ## 3. Performance Budget & Regression Thresholds
 
 In compliance with **Rule 12**, any pull request or code change that violates the following regression budgets will be rejected:

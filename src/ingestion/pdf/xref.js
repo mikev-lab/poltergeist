@@ -109,6 +109,45 @@ export class PdfXrefParser {
     const trailerDict = parser.parseObject();
     if (trailerDict instanceof Map) {
       xref.trailer = trailerDict;
+
+      // Follow Prev pointer for incremental updates / hybrid xrefs
+      let prevOffset = trailerDict.get('Prev');
+      const visited = new Set();
+      while (typeof prevOffset === 'number' && prevOffset > 0 && !visited.has(prevOffset)) {
+        visited.add(prevOffset);
+        const prevLexer = new PdfLexer(this.bytes);
+        prevLexer.seek(prevOffset);
+        const tok = prevLexer.nextToken();
+        if (tok.type === TokenType.KEYWORD && tok.value === 'xref') {
+          while (true) {
+            const firstToken = prevLexer.nextToken();
+            if (firstToken.type === TokenType.KEYWORD && firstToken.value === 'trailer') break;
+            if (firstToken.type !== TokenType.NUMBER) break;
+            const countToken = prevLexer.nextToken();
+            if (countToken.type !== TokenType.NUMBER) break;
+            let objNum = firstToken.value;
+            const count = countToken.value;
+            for (let i = 0; i < count; i++) {
+              const offToken = prevLexer.nextToken();
+              const genToken = prevLexer.nextToken();
+              const typeToken = prevLexer.nextToken();
+              if (typeToken.value === 'n' && !xref.offsets.has(objNum)) {
+                xref.setOffset(objNum, offToken.value);
+              }
+              objNum++;
+            }
+          }
+          const prevParser = new PdfParser(prevLexer);
+          const prevTrailer = prevParser.parseObject();
+          if (prevTrailer instanceof Map && prevTrailer.has('Prev')) {
+            prevOffset = prevTrailer.get('Prev');
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
     }
 
     return xref;

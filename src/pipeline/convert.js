@@ -749,7 +749,7 @@ export async function convertParallel(input, options = {}) {
       const taskPromises = document.pages.map((page, index) => {
         const pageNum = page.pageNumber || (index + 1);
         const baseName = options.pageNaming ? options.pageNaming(pageNum, page) : `page_${pageNum}`;
-        const pageImage = page.image || page.rasterBackground;
+        const pageImage = page.rawImageStream ? null : (page.image || page.rasterBackground);
 
         const workerOptions = { ...options };
         delete workerOptions.pageNaming;
@@ -765,6 +765,7 @@ export async function convertParallel(input, options = {}) {
             height: page.height,
             dpi: page.dpi,
             boxes: page.boxes,
+            rawImageStream: page.rawImageStream || null,
             image: pageImage ? {
               width: pageImage.width,
               height: pageImage.height,
@@ -824,7 +825,7 @@ export async function convertParallel(input, options = {}) {
 
     const taskPromises = document.pages.map((page, index) => {
       const pageNum = page.pageNumber || (index + 1);
-      const pageImage = page.image || page.rasterBackground;
+      const pageImage = page.rawImageStream ? null : (page.image || page.rasterBackground);
 
       return pool.execute({
         mode: 'process_page',
@@ -834,6 +835,7 @@ export async function convertParallel(input, options = {}) {
           height: page.height,
           dpi: page.dpi,
           boxes: page.boxes,
+          rawImageStream: page.rawImageStream || null,
           image: pageImage ? {
             width: pageImage.width,
             height: pageImage.height,

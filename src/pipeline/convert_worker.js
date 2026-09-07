@@ -8,6 +8,7 @@ import { parentPort } from 'node:worker_threads';
 import { convert, convertImageToCmyk } from './convert.js';
 import { Document, PageRecord } from '../types/document.js';
 import { RasterImage, ColorSpaceType } from '../types/image.js';
+import { JpegDecoder } from '../ingestion/raster/jpeg/jpeg_decoder.js';
 import { downsampleForPrepress } from '../compositor/resample/resample.js';
 
 if (parentPort) {
@@ -20,6 +21,14 @@ if (parentPort) {
       }
 
       let image = pageData.image;
+      if (!image && pageData.rawImageStream) {
+        try {
+          image = JpegDecoder.decode(pageData.rawImageStream, options);
+        } catch {
+          // non-fatal
+        }
+      }
+
       if (image && !(image instanceof RasterImage) && typeof image === 'object') {
         image = new RasterImage(image);
       }

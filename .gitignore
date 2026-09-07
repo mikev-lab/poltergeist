@@ -152,3 +152,4 @@ Agents.md
 *.agent.log
 *.agent.json
 
+test_multipage_pdf.pdf

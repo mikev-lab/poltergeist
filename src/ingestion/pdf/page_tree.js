@@ -134,7 +134,7 @@ export class PageTreeTraverser {
       }
 
       // Extract raster image from page resources if present
-      let pageImage = null;
+      let rawImageStream = null;
       const resRef = node.get('Resources') || currentInherited.resources;
       if (resRef) {
         const resources = this.resolve(resRef);
@@ -147,12 +147,8 @@ export class PageTreeTraverser {
                 const stream = xObj.get('__stream');
                 const filter = xObj.get('Filter');
                 if (filter === 'DCTDecode' || (Array.isArray(filter) && filter.includes('DCTDecode'))) {
-                  try {
-                    pageImage = JpegDecoder.decode(stream, this.options);
-                    break;
-                  } catch {
-                    // Non-fatal
-                  }
+                  rawImageStream = stream;
+                  break;
                 }
               }
             }
@@ -160,14 +156,18 @@ export class PageTreeTraverser {
         }
       }
 
-      collectedPages.push(new PageRecord({
+      const options = this.options;
+      const page = new PageRecord({
         pageNumber: pageNum,
         width: boxes.width,
         height: boxes.height,
         boxes,
-        image: pageImage,
-        text: pageText
-      }));
+        text: pageText,
+        rawImageStream,
+        imageLoader: rawImageStream ? () => JpegDecoder.decode(rawImageStream, options) : null
+      });
+
+      collectedPages.push(page);
       return;
     }
 
