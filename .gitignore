@@ -153,3 +153,4 @@ Agents.md
 *.agent.json
 
 test_multipage_pdf.pdf
+test_multipage_bw.pdf
