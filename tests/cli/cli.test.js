@@ -73,6 +73,28 @@ test('CLI Args: Ghostscript switch emulation', () => {
   assert.equal(opts.input, 'sample.pdf');
 });
 
+test('CLI Args: Advanced Ghostscript switch emulation (page range, JPEG quality, PDFSETTINGS)', () => {
+  const args = [
+    '-sDEVICE=jpeg',
+    '-dFirstPage=2',
+    '-dLastPage=2',
+    '-dJPEGQ=90',
+    '-dPDFSETTINGS=/prepress',
+    '-dTextAlphaBits=4',
+    '-dGraphicsAlphaBits=4',
+    '-sOutputFile=page_2.jpg',
+    'document.pdf'
+  ];
+
+  const opts = parseArgs(args);
+  assert.equal(opts.format, 'jpeg');
+  assert.equal(opts.page, 2);
+  assert.equal(opts.proofQuality, 90);
+  assert.equal(opts.targetDpi, 300);
+  assert.equal(opts.output, 'page_2.jpg');
+  assert.equal(opts.input, 'document.pdf');
+});
+
 test('CLI Integration: --help displays usage and exits with 0', async () => {
   const { stdout, stderr } = await execFileAsync(process.execPath, [CLI_PATH, '--help']);
   assert.ok(stdout.includes('Poltergeist CLI'));

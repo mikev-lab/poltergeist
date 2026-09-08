@@ -12,6 +12,7 @@ export class PdfXrefTable {
   constructor() {
     /** @type {Map<number, number>} Maps objNum -> byteOffset */
     this.offsets = new Map();
+    this.compressedObjects = new Map();
     /** @type {Map<number, { streamObjNum: number, index: number }>} Maps objNum -> compressed stream ref */
     this.compressedRefs = new Map();
     /** @type {Map<string, any>} */
@@ -175,6 +176,60 @@ export class PdfXrefParser {
         data = zlib.inflateSync(stream);
       } catch {
         // non-fatal
+      }
+    }
+
+    // Decode W array
+    const w = dict.get('W');
+    if (Array.isArray(w) && w.length >= 3) {
+      const [w1, w2, w3] = w;
+      const entrySize = w1 + w2 + w3;
+      if (entrySize > 0) {
+        let indexArray = dict.get('Index');
+        if (!Array.isArray(indexArray) || indexArray.length < 2) {
+          const size = dict.get('Size') || 0;
+          indexArray = [0, size];
+        }
+
+        let byteOffset = 0;
+        for (let i = 0; i < indexArray.length; i += 2) {
+          let currentObjNum = indexArray[i];
+          const count = indexArray[i + 1];
+
+          for (let j = 0; j < count; j++) {
+            if (byteOffset + entrySize > data.length) break;
+
+            let type = 1;
+            if (w1 > 0) {
+              type = 0;
+              for (let k = 0; k < w1; k++) {
+                type = (type << 8) | data[byteOffset + k];
+              }
+            }
+
+            let field2 = 0;
+            for (let k = 0; k < w2; k++) {
+              field2 = (field2 << 8) | data[byteOffset + w1 + k];
+            }
+
+            let field3 = 0;
+            for (let k = 0; k < w3; k++) {
+              field3 = (field3 << 8) | data[byteOffset + w1 + w2 + k];
+            }
+
+            if (type === 1) {
+              xref.setOffset(currentObjNum, field2);
+            } else if (type === 2) {
+              xref.compressedObjects.set(currentObjNum, {
+                streamObjNum: field2,
+                index: field3
+              });
+            }
+
+            byteOffset += entrySize;
+            currentObjNum++;
+          }
+        }
       }
     }
 

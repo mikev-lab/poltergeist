@@ -6,7 +6,7 @@
 
 import { PageRecord, PageBox } from '../../types/document.js';
 import { PdfFilterDecoder } from './filters.js';
-import { PdfLexer } from './lexer.js';
+import { PdfLexer, TokenType } from './lexer.js';
 import { PdfParser, PdfRef } from './parser.js';
 import { JpegDecoder } from '../raster/jpeg/jpeg_decoder.js';
 
@@ -35,6 +35,48 @@ export class PageTreeTraverser {
 
     if (this.objectCache.has(obj.objNum)) {
       return this.objectCache.get(obj.objNum);
+    }
+
+    // 1. Check if object is inside an Object Stream (/Type /ObjStm)
+    if (this.xref.compressedObjects && this.xref.compressedObjects.has(obj.objNum)) {
+      const compressedInfo = this.xref.compressedObjects.get(obj.objNum);
+      const stmObj = this.resolve(new PdfRef(compressedInfo.streamObjNum, 0));
+      if (stmObj instanceof Map && stmObj.has('__stream')) {
+        let streamBytes = stmObj.get('__stream');
+        const filter = stmObj.get('Filter');
+        if (filter) {
+          try {
+            streamBytes = PdfFilterDecoder.decode(streamBytes, filter, stmObj.get('DecodeParms'));
+          } catch {}
+        }
+
+        const first = stmObj.get('First') || 0;
+        const n = stmObj.get('N') || 0;
+        const streamLexer = new PdfLexer(streamBytes);
+        const pairs = [];
+        for (let i = 0; i < n; i++) {
+          const numToken = streamLexer.nextToken();
+          const offToken = streamLexer.nextToken();
+          if (numToken && offToken && numToken.type === TokenType.NUMBER && offToken.type === TokenType.NUMBER) {
+            pairs.push({ objNum: numToken.value, offset: offToken.value });
+          }
+        }
+
+        for (const pair of pairs) {
+          const targetOffset = first + pair.offset;
+          if (targetOffset < streamBytes.length) {
+            const objLexer = new PdfLexer(streamBytes);
+            objLexer.seek(targetOffset);
+            const objParser = new PdfParser(objLexer);
+            const val = objParser.parseObject();
+            this.objectCache.set(pair.objNum, val);
+          }
+        }
+
+        if (this.objectCache.has(obj.objNum)) {
+          return this.objectCache.get(obj.objNum);
+        }
+      }
     }
 
     const offset = this.xref.getOffset(obj.objNum);

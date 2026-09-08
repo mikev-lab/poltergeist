@@ -42,6 +42,83 @@ export function parseArgs(argv = []) {
     const arg = argv[i];
 
     // 1. Ghostscript Flag Emulation
+    // Ghostscript page range emulation
+    if (arg.startsWith('-dFirstPage=')) {
+      const p = parseInt(arg.slice('-dFirstPage='.length), 10);
+      if (!isNaN(p)) {
+        options.firstPage = p;
+        if (options.lastPage === undefined) {
+          options.page = p;
+        } else if (options.lastPage === p) {
+          options.page = p;
+          options.pages = [p];
+        } else if (options.lastPage > p) {
+          options.pages = [];
+          for (let k = p; k <= options.lastPage; k++) options.pages.push(k);
+        }
+      }
+      options.rawGhostscriptFlags.push(arg);
+      continue;
+    }
+
+    if (arg.startsWith('-dLastPage=')) {
+      const p = parseInt(arg.slice('-dLastPage='.length), 10);
+      if (!isNaN(p)) {
+        options.lastPage = p;
+        if (options.firstPage === undefined) {
+          options.page = p;
+        } else if (options.firstPage === p) {
+          options.page = p;
+          options.pages = [p];
+        } else if (options.firstPage < p) {
+          options.pages = [];
+          for (let k = options.firstPage; k <= p; k++) options.pages.push(k);
+        }
+      }
+      options.rawGhostscriptFlags.push(arg);
+      continue;
+    }
+
+    if (arg.startsWith('-dJPEGQ=')) {
+      const q = parseInt(arg.slice('-dJPEGQ='.length), 10);
+      if (!isNaN(q)) {
+        options.proofQuality = q;
+      }
+      options.rawGhostscriptFlags.push(arg);
+      continue;
+    }
+
+    if (arg.startsWith('-dPDFSETTINGS=')) {
+      const preset = arg.slice('-dPDFSETTINGS='.length).toLowerCase();
+      if (preset.includes('screen')) {
+        options.targetDpi = 72;
+      } else if (preset.includes('ebook')) {
+        options.targetDpi = 150;
+      } else if (preset.includes('prepress')) {
+        options.targetDpi = 300;
+      }
+      options.rawGhostscriptFlags.push(arg);
+      continue;
+    }
+
+    if (arg.startsWith('-sProcessColorModel=')) {
+      const model = arg.slice('-sProcessColorModel='.length);
+      if (model.toLowerCase().includes('gray')) {
+        options.colorMode = 'gray';
+      }
+      options.rawGhostscriptFlags.push(arg);
+      continue;
+    }
+
+    if (arg.startsWith('-dTextAlphaBits=') || arg.startsWith('-dGraphicsAlphaBits=') ||
+        arg.startsWith('-dAutoRotatePages=') || arg.startsWith('-dPrinted=') ||
+        arg.startsWith('-dRenderIntent=') || arg.startsWith('-dBlackPtComp=') ||
+        arg.startsWith('-sICCProfilesDir=') || arg.startsWith('-sDefaultCMYKProfile=') ||
+        arg.startsWith('-dCompatibilityLevel=')) {
+      options.rawGhostscriptFlags.push(arg);
+      continue;
+    }
+
     if (arg.startsWith('-sDEVICE=')) {
       const dev = arg.slice('-sDEVICE='.length).toLowerCase();
       options.rawGhostscriptFlags.push(arg);
@@ -52,6 +129,8 @@ export function parseArgs(argv = []) {
       } else if (dev === 'tiffsep' || dev === 'tiffsep1') {
         options.format = 'tiffsep';
       } else if (dev.startsWith('tiff')) {
+        options.format = 'tiff';
+      } else if (dev === 'pngalpha' || dev === 'png16m' || dev === 'png256' || dev === 'pnggray') {
         options.format = 'tiff';
       }
       continue;

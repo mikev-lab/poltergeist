@@ -5,10 +5,12 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import zlib from 'node:zlib';
 import { PdfXrefParser } from '../../src/ingestion/pdf/xref.js';
 import { PdfRepair } from '../../src/ingestion/pdf/repair.js';
 import { PdfDecoder } from '../../src/ingestion/pdf/pdf_decoder.js';
 import { PageTreeTraverser } from '../../src/ingestion/pdf/page_tree.js';
+import { PdfRef } from '../../src/ingestion/pdf/parser.js';
 import { PdfWriter } from '../../src/export/pdf/writer.js';
 import { PdfDictionary, PdfName, PdfArray, PdfString, PdfStream } from '../../src/export/pdf/objects.js';
 
@@ -134,4 +136,40 @@ describe('PdfXrefParser & Self-Healing PdfRepair', () => {
     assert.equal(doc2.pages[0].widthPts, 612);
     assert.equal(doc2.pages[1].widthPts, 792);
   });
+
+  test('PDF 1.5+: Parses compressed XRef stream (/Type /XRef) and Object Streams (/Type /ObjStm)', () => {
+    const header = Buffer.from('%PDF-1.5\n');
+    const obj1Offset = header.length;
+    const obj1 = Buffer.from('1 0 obj\n<</Type/ObjStm/N 1/First 4/Length 10>>\nstream\n2 0 12345\nendstream\nendobj\n');
+    const obj3Offset = obj1Offset + obj1.length;
+
+    // Type 1: uncompressed, Type 2: ObjStm
+    // Table: obj 0 (free), obj 1 (offset obj1Offset), obj 2 (in ObjStm 1, index 0)
+    // /W [1 2 1] -> entry size = 4 bytes
+    const entries = Buffer.from([
+      0, 0, 0, 0,
+      1, Math.floor(obj1Offset / 256), obj1Offset % 256, 0,
+      2, 0, 1, 0
+    ]);
+    const zlibStream = zlib.deflateSync(entries);
+    const obj3Head = Buffer.from('3 0 obj\n<</Type/XRef/Size 3/W [1 2 1]/Filter/FlateDecode/Root 2 0 R/Length ' + zlibStream.length + '>>\nstream\n');
+    const obj3Tail = Buffer.from('\nendstream\nendobj\nstartxref\n' + obj3Offset + '\n%%EOF\n');
+
+    const xrefStreamPdf = Buffer.concat([header, obj1, obj3Head, zlibStream, obj3Tail]);
+
+    const parser = new PdfXrefParser(xrefStreamPdf);
+    const xref = parser.parse();
+
+    // Verify xref table properties
+    assert.equal(xref.offsets.get(1), obj1Offset);
+    assert.deepEqual(xref.compressedObjects.get(2), { streamObjNum: 1, index: 0 });
+    assert.ok(xref.trailer.has('Root'));
+
+    // Verify PageTreeTraverser lazy resolution of compressed object from Object Stream
+    const traverser = new PageTreeTraverser(xrefStreamPdf, xref);
+    const resolved = traverser.resolve(new PdfRef(2, 0));
+    assert.equal(resolved, 12345);
+    assert.equal(traverser.objectCache.get(2), 12345);
+  });
 });
+
