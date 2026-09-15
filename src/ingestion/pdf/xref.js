@@ -5,6 +5,7 @@
  */
 
 import zlib from 'node:zlib';
+import { PdfFilterDecoder } from './filters.js';
 import { PdfLexer, TokenType } from './lexer.js';
 import { PdfParser } from './parser.js';
 
@@ -171,11 +172,15 @@ export class PdfXrefParser {
     // Decompress stream if needed
     let data = stream;
     const filter = dict.get('Filter');
-    if (filter === 'FlateDecode' || (Array.isArray(filter) && filter.includes('FlateDecode'))) {
+    if (filter) {
       try {
-        data = zlib.inflateSync(stream);
+        data = PdfFilterDecoder.decode(stream, filter, dict.get('DecodeParms'));
       } catch {
-        // non-fatal
+        try {
+          data = zlib.inflateSync(stream);
+        } catch {
+          // non-fatal
+        }
       }
     }
 
@@ -229,6 +234,103 @@ export class PdfXrefParser {
             byteOffset += entrySize;
             currentObjNum++;
           }
+        }
+      }
+    }
+
+    // Traverse /Prev chain for incremental update revisions
+    if (dict.has('Prev')) {
+      let prevOffset = dict.get('Prev');
+      while (prevOffset && typeof prevOffset === 'number' && prevOffset > 0 && prevOffset < this.bytes.length) {
+        const prevLexer = new PdfLexer(this.bytes);
+        prevLexer.seek(prevOffset);
+        const tok = prevLexer.nextToken();
+        if (tok.type === TokenType.KEYWORD && tok.value === 'xref') {
+          while (true) {
+            const firstToken = prevLexer.nextToken();
+            if (firstToken.type === TokenType.KEYWORD && firstToken.value === 'trailer') break;
+            if (firstToken.type !== TokenType.NUMBER) break;
+            const countToken = prevLexer.nextToken();
+            if (countToken.type !== TokenType.NUMBER) break;
+            let objNum = firstToken.value;
+            const count = countToken.value;
+            for (let i = 0; i < count; i++) {
+              const offToken = prevLexer.nextToken();
+              const genToken = prevLexer.nextToken();
+              const typeToken = prevLexer.nextToken();
+              if (typeToken.value === 'n' && !xref.offsets.has(objNum)) {
+                xref.setOffset(objNum, offToken.value);
+              }
+              objNum++;
+            }
+          }
+          const prevParser = new PdfParser(prevLexer);
+          const prevTrailer = prevParser.parseObject();
+          if (prevTrailer instanceof Map && prevTrailer.has('Prev')) {
+            prevOffset = prevTrailer.get('Prev');
+          } else {
+            break;
+          }
+        } else if (tok.type === TokenType.NUMBER) {
+          prevLexer.seek(prevOffset);
+          const prevParser = new PdfParser(prevLexer);
+          const prevObj = prevParser.parseIndirectObject();
+          if (prevObj && prevObj.value instanceof Map) {
+            const prevDict = prevObj.value;
+            const prevStream = prevObj.stream;
+            if (prevStream) {
+              let prevData = prevStream;
+              const pFilter = prevDict.get('Filter');
+              if (pFilter) {
+                try {
+                  prevData = PdfFilterDecoder.decode(prevStream, pFilter, prevDict.get('DecodeParms'));
+                } catch {
+                  try { prevData = zlib.inflateSync(prevStream); } catch {}
+                }
+              }
+              const pW = prevDict.get('W');
+              if (Array.isArray(pW) && pW.length >= 3) {
+                const [pw1, pw2, pw3] = pW;
+                const pEntrySize = pw1 + pw2 + pw3;
+                if (pEntrySize > 0) {
+                  let pIndex = prevDict.get('Index');
+                  if (!Array.isArray(pIndex) || pIndex.length < 2) {
+                    pIndex = [0, prevDict.get('Size') || 0];
+                  }
+                  let pOff = 0;
+                  for (let i = 0; i < pIndex.length; i += 2) {
+                    let curObj = pIndex[i];
+                    const pCnt = pIndex[i + 1];
+                    for (let j = 0; j < pCnt; j++) {
+                      if (pOff + pEntrySize > prevData.length) break;
+                      let pType = 1;
+                      if (pw1 > 0) {
+                        pType = 0;
+                        for (let k = 0; k < pw1; k++) pType = (pType << 8) | prevData[pOff + k];
+                      }
+                      let pf2 = 0;
+                      for (let k = 0; k < pw2; k++) pf2 = (pf2 << 8) | prevData[pOff + pw1 + k];
+                      let pf3 = 0;
+                      for (let k = 0; k < pw3; k++) pf3 = (pf3 << 8) | prevData[pOff + pw1 + pw2 + k];
+
+                      if (pType === 1 && !xref.offsets.has(curObj)) {
+                        xref.setOffset(curObj, pf2);
+                      } else if (pType === 2 && !xref.compressedObjects.has(curObj)) {
+                        xref.compressedObjects.set(curObj, { streamObjNum: pf2, index: pf3 });
+                      }
+                      pOff += pEntrySize;
+                      curObj++;
+                    }
+                  }
+                }
+              }
+            }
+            prevOffset = prevDict.get('Prev');
+          } else {
+            break;
+          }
+        } else {
+          break;
         }
       }
     }

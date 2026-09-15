@@ -526,8 +526,35 @@ export function convert(input, options = {}) {
             dpiY: targetDpi,
             data: new Uint8Array(targetW * targetH * 3).fill(255)
           });
-        } else if (firstRaster.width !== targetW || firstRaster.height !== targetH) {
-          firstRaster = resample(firstRaster, targetW, targetH, { filter: 'bicubic' });
+        } else {
+          if (firstRaster.colorSpace === ColorSpaceType.CMYK || firstRaster.channels === 4) {
+            const numPixels = firstRaster.width * firstRaster.height;
+            const rgbData = new Uint8Array(numPixels * 3);
+            const cData = firstRaster.data;
+            for (let i = 0; i < numPixels; i++) {
+              const c = cData[i * 4] / 255.0;
+              const m = cData[i * 4 + 1] / 255.0;
+              const y = cData[i * 4 + 2] / 255.0;
+              const k = cData[i * 4 + 3] / 255.0;
+              rgbData[i * 3] = Math.round(255.0 * (1.0 - c) * (1.0 - k));
+              rgbData[i * 3 + 1] = Math.round(255.0 * (1.0 - m) * (1.0 - k));
+              rgbData[i * 3 + 2] = Math.round(255.0 * (1.0 - y) * (1.0 - k));
+            }
+            firstRaster = new RasterImage({
+              width: firstRaster.width,
+              height: firstRaster.height,
+              channels: 3,
+              bitsPerSample: 8,
+              colorSpace: ColorSpaceType.RGB,
+              pixelFormat: PixelFormat.RGB24,
+              dpiX: targetDpi,
+              dpiY: targetDpi,
+              data: rgbData
+            });
+          }
+          if (firstRaster.width !== targetW || firstRaster.height !== targetH) {
+            firstRaster = resample(firstRaster, targetW, targetH, { filter: 'bicubic' });
+          }
         }
         return JpegWriter.write(firstRaster, { ...options, dpiX: targetDpi, dpiY: targetDpi });
       }

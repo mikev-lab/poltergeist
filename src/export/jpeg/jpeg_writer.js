@@ -5,7 +5,7 @@
  * JFIF DPI metadata embedding, quality scaling, and ICC APP2 markers.
  */
 
-import { ColorSpaceType, calculateBufferSize } from '../../types/image.js';
+import { RasterImage, PixelFormat, ColorSpaceType, calculateBufferSize } from '../../types/image.js';
 
 // Standard 8x8 Zig-Zag scan order (ITU-T T.81 Figure A.6)
 const ZIGZAG = new Uint8Array([
@@ -254,7 +254,34 @@ export class JpegWriter {
       throw new Error('Invalid raster image provided to JpegWriter.');
     }
 
-    const { width, height, data, channels, colorSpace } = image;
+    let targetImage = image;
+    if (targetImage.colorSpace === ColorSpaceType.CMYK || targetImage.channels === 4) {
+      const numPixels = targetImage.width * targetImage.height;
+      const rgbData = new Uint8Array(numPixels * 3);
+      const cData = targetImage.data;
+      for (let i = 0; i < numPixels; i++) {
+        const c = cData[i * 4] / 255.0;
+        const m = cData[i * 4 + 1] / 255.0;
+        const y = cData[i * 4 + 2] / 255.0;
+        const k = cData[i * 4 + 3] / 255.0;
+        rgbData[i * 3] = Math.round(255.0 * (1.0 - c) * (1.0 - k));
+        rgbData[i * 3 + 1] = Math.round(255.0 * (1.0 - m) * (1.0 - k));
+        rgbData[i * 3 + 2] = Math.round(255.0 * (1.0 - y) * (1.0 - k));
+      }
+      targetImage = new RasterImage({
+        width: targetImage.width,
+        height: targetImage.height,
+        channels: 3,
+        bitsPerSample: 8,
+        colorSpace: ColorSpaceType.RGB,
+        pixelFormat: PixelFormat.RGB24,
+        dpiX: options.dpiX ?? options.dpi ?? targetImage.dpiX ?? 72,
+        dpiY: options.dpiY ?? options.dpi ?? targetImage.dpiY ?? 72,
+        data: rgbData
+      });
+    }
+
+    const { width, height, data, channels, colorSpace } = targetImage;
     calculateBufferSize(width, height, channels, 1);
 
     const isGray = colorSpace === ColorSpaceType.GRAY || channels === 1;

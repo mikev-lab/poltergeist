@@ -5,6 +5,7 @@
  */
 
 import { PageRecord, PageBox } from '../../types/document.js';
+import { RasterImage, PixelFormat, ColorSpaceType } from '../../types/image.js';
 import { PdfFilterDecoder } from './filters.js';
 import { PdfLexer, TokenType } from './lexer.js';
 import { PdfParser, PdfRef } from './parser.js';
@@ -177,6 +178,7 @@ export class PageTreeTraverser {
 
       // Extract raster image from page resources if present
       let rawImageStream = null;
+      let flateRaster = null;
       const resRef = node.get('Resources') || currentInherited.resources;
       if (resRef) {
         const resources = this.resolve(resRef);
@@ -191,6 +193,38 @@ export class PageTreeTraverser {
                 if (filter === 'DCTDecode' || (Array.isArray(filter) && filter.includes('DCTDecode'))) {
                   rawImageStream = stream;
                   break;
+                } else if (filter === 'FlateDecode' || (Array.isArray(filter) && filter.includes('FlateDecode'))) {
+                  try {
+                    const width = xObj.get('Width');
+                    const height = xObj.get('Height');
+                    const bpc = xObj.get('BitsPerComponent') || 8;
+                    const cs = xObj.get('ColorSpace');
+                    const decodeParms = this.resolve(xObj.get('DecodeParms'));
+                    const decompressed = PdfFilterDecoder.decode(stream, 'FlateDecode', decodeParms);
+                    if (decompressed && width && height) {
+                      let colorSpace = ColorSpaceType.RGB;
+                      let channels = 3;
+                      if (cs === 'DeviceGray' || cs === 'Gray') {
+                        colorSpace = ColorSpaceType.GRAY;
+                        channels = 1;
+                      } else if (cs === 'DeviceCMYK' || cs === 'CMYK') {
+                        colorSpace = ColorSpaceType.CMYK;
+                        channels = 4;
+                      }
+                      flateRaster = new RasterImage({
+                        width,
+                        height,
+                        channels,
+                        bitsPerSample: bpc,
+                        colorSpace,
+                        pixelFormat: channels === 4 ? PixelFormat.CMYK32 : (channels === 1 ? PixelFormat.GRAY8 : PixelFormat.RGB24),
+                        dpiX: 300,
+                        dpiY: 300,
+                        data: decompressed
+                      });
+                      break;
+                    }
+                  } catch {}
                 }
               }
             }
@@ -206,6 +240,7 @@ export class PageTreeTraverser {
         boxes,
         text: pageText,
         rawImageStream,
+        image: flateRaster,
         imageLoader: rawImageStream ? () => JpegDecoder.decode(rawImageStream, options) : null
       });
 
