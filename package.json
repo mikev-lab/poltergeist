@@ -31,7 +31,7 @@
     "ciede2000",
     "zero-dependencies"
   ],
-  "author": "",
-  "license": "Apache-2.0",
+  "author": "Michael Valdez (mikev-lab)",
+  "license": "BSL-1.1",
   "dependencies": {}
 }

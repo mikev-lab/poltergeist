@@ -10,9 +10,10 @@
     <img src="https://img.shields.io/badge/Node.js-%3E%3D22.0.0-339933?logo=node.js&logoColor=white" alt="Node.js Version">
     <img src="https://img.shields.io/badge/dependencies-0-success.svg?style=flat&color=2ea44f" alt="Zero Dependencies">
     <img src="https://img.shields.io/badge/Ghostscript%20Parity-100%25-6f42c1.svg" alt="Ghostscript Parity">
-    <img src="https://img.shields.io/badge/tests-331%20passing-brightgreen.svg" alt="Test Suite">
+    <img src="https://img.shields.io/badge/tests-333%20passing-brightgreen.svg" alt="Test Suite">
     <img src="https://img.shields.io/badge/memory--safety-100%25-blue.svg" alt="Memory Safety">
-    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
+    [![License: BSL 1.1](https://img.shields.io/badge/License-BSL_1.1_(Fair_Source)-blue.svg)](./LICENSE)
+    [![Grant: <$125k Gross Free](https://img.shields.io/badge/Commercial_Grant-%3C$125k_Gross_Free-success.svg)](./LICENSE)
   </p>
 </p>
 
@@ -286,6 +287,12 @@ npm run benchmark
 
 ---
 
-## 📄 License
+## 📄 License & Fair Source Model
 
-MIT © [Mike Valdez](https://github.com/mikev-lab)
+**Poltergeist** is licensed under the **Business Source License 1.1 (BSL 1.1)** with a generous Fair Source / Print Shop Grant.
+
+- **Free for Individuals, Non-Profits, & Small Print Shops**: Free for commercial and production use by any entity or organization generating **less than $125,000 USD in gross annual revenue** (or total funding received).
+- **Enterprise Commercial License Required**: Any commercial use by entities whose gross annual revenue meets or exceeds **$125,000 USD** requires an enterprise commercial agreement.
+- **Automatic Open Source Conversion**: Converts automatically to **Apache License 2.0** on **January 1, 2030** (or 4 years from initial distribution).
+
+See [LICENSE](./LICENSE) for the full legal terms. For enterprise commercial licensing inquiries, contact [Michael Valdez](https://github.com/mikev-lab) or via [LinkedIn](https://linkedin.com/in/michael-j-valdez).
