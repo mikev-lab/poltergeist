@@ -12,8 +12,8 @@
     <img src="https://img.shields.io/badge/Ghostscript%20Parity-100%25-6f42c1.svg" alt="Ghostscript Parity">
     <img src="https://img.shields.io/badge/tests-333%20passing-brightgreen.svg" alt="Test Suite">
     <img src="https://img.shields.io/badge/memory--safety-100%25-blue.svg" alt="Memory Safety">
-    [![License: BSL 1.1](https://img.shields.io/badge/License-BSL_1.1_(Fair_Source)-blue.svg)](./LICENSE)
-    [![Grant: <$125k Gross Free](https://img.shields.io/badge/Commercial_Grant-%3C$125k_Gross_Free-success.svg)](./LICENSE)
+    <a href="./LICENSE"><img src="https://img.shields.io/badge/License-BSL_1.1_(Fair_Source)-blue.svg" alt="License: BSL 1.1"></a>
+    <a href="./LICENSE"><img src="https://img.shields.io/badge/Commercial_Grant-%3C$125k_Gross_Free-success.svg" alt="Grant: <$125k Gross Free"></a>
   </p>
 </p>
 
